@@ -4,17 +4,50 @@
 var VERSION = "0.0.1";
 
 var fs = require("fs");
+var sourceMap = require("source-map");
 
 var Class = require("../lib/Class");
 eval(Class.$import("../lib/compiler"));
 eval(Class.$import("../lib/jsemitter"));
+eval(Class.$import("../lib/platform"));
 
 "use strict";
+
+var SourceMapGenerator = SourceMapGeneratorBase.extend({
+	initialize: function (file, sourceRoot) {
+		this._impl = new sourceMap.SourceMapGenerator({
+			file: file,
+			sourceRoot: sourceRoot // optional
+		});
+	},
+
+	add: function (generatedPos, originalPos, source, name) {
+		this._impl.addMapping({
+			generated: generatedPos,
+			original:  originalPos,
+			source: source, // optional
+			name: name // optional
+		});
+	},
+
+	generate: function () {
+		return this._impl.toString();
+	},
+
+	magicToken: function () {
+		var mappingName = "FIXME";
+		return "\n" + "// @sourceMappingURL=" + mappingName + "\n";
+	}
+});
 
 var NodePlatform = Platform.extend({
 	load: function(filename) {
 		return fs.readFileSync(filename).toString();
 	},
+
+	createSourceMapGenerator: function (file, sourceRoot) {
+		return new SourceMapGenerator(file, sourceRoot);
+	}
 });
 
 var JSX = Class.extend({
