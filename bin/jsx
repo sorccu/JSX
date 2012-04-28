@@ -96,6 +96,7 @@ var JSX = Class.extend({
 
 		var compiler = new Compiler(platform);
 
+		var hasEmitter = false;
 		var outputFile = null;
 		var opt, optarg;
 		while ((opt = getopt()) != null) {
@@ -125,9 +126,11 @@ var JSX = Class.extend({
 			case "--target":
 				if ((optarg = getoptarg()) == null)
 					process.exit(1);
+				hasEmitter = true;
 				switch (optarg) {
 				case "javascript":
-					// it's the only interface, so skip for now
+					compiler.setEmitter(new JavaScriptEmitter(outputFile,
+															  platform));
 					break;
 				case "c++":
 					throw new Error("FIXME");
@@ -152,6 +155,10 @@ var JSX = Class.extend({
 			}
 		}
 
+		if(!hasEmitter)
+			compiler.setEmitter(new JavaScriptEmitter(outputFile,
+													  platform));
+		
 		if (argIndex == args.length) {
 			console.error("no files");
 			process.exit(1);
