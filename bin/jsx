@@ -59,6 +59,8 @@ var JSX = Class.extend({
 			"Usage: jsx [options] source-files\n" +
 			"\n" +
 			"Options:\n" +
+			"   -o      file\n" +
+			"  --output file              output file (default:stdout)\n" +
 			"  --mode (compile|parse)     compilation mode (default:compile)\n" +
 			"  --target (javascript|c++)  target language (default:javascript)\n" +
 			"  --version                  displays the version and exits\n" +
@@ -94,9 +96,16 @@ var JSX = Class.extend({
 
 		var compiler = new Compiler(platform);
 
+		var outputFile = null;
 		var opt, optarg;
 		while ((opt = getopt()) != null) {
 			switch (opt) {
+			case "-o":
+			case "--output":
+				if((outputFile = getoptarg()) == null)
+					process.exit(1);
+				compiler.setOutputFile(outputFile);
+				break;
 			case "--mode":
 				if ((optarg = getoptarg()) == null)
 					process.exit(1);
@@ -154,7 +163,10 @@ var JSX = Class.extend({
 		if (! compiler.compile())
 			process.exit(1);
 
-		console.log(compiler.getOutput());
+		if(outputFile == null)
+			process.stdout.write(compiler.getOutput());
+		else
+			fs.writeFileSync(outputFile, compiler.getOutput());
 	}
 
 });
