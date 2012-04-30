@@ -14,9 +14,10 @@ eval(Class.$import("../lib/platform"));
 "use strict";
 
 var SourceMapGenerator = SourceMapGeneratorBase.extend({
-	initialize: function (file, sourceRoot) {
+	initialize: function (outputFile, sourceRoot) {
+		this._outputFile = outputFile;
 		this._impl = new sourceMap.SourceMapGenerator({
-			file: file,
+			file: outputFile,
 			sourceRoot: sourceRoot // optional
 		});
 	},
@@ -30,13 +31,17 @@ var SourceMapGenerator = SourceMapGeneratorBase.extend({
 		});
 	},
 
+	getSourceMappingFile: function () {
+		return this._outputFile + ".mapping";
+	},
+
 	generate: function () {
 		return this._impl.toString();
 	},
 
 	magicToken: function () {
-		var mappingName = "FIXME";
-		return "\n" + "// @sourceMappingURL=" + mappingName + "\n";
+		return "\n" + "// @sourceMappingURL=" +
+			this.getSourceMappingFile() + "\n";
 	}
 });
 
@@ -45,8 +50,25 @@ var NodePlatform = Platform.extend({
 		return fs.readFileSync(filename).toString();
 	},
 
+	_sourceMapGen: {},
+
 	createSourceMapGenerator: function (file, sourceRoot) {
-		return new SourceMapGenerator(file, sourceRoot);
+		this._sourceMapGen[file] = new SourceMapGenerator(file, sourceRoot);
+		return this._sourceMapGen[file];
+	},
+	
+	// NodePlatform specific methods
+	writeTo: function (outputFile, compiler) {
+		if (outputFile == null) {
+			process.stdout.write(compiler.getOutput());
+		}
+		else {
+			fs.writeFileSync(outputFile, compiler.getOutput());
+			var sourceMapGen = this._sourceMapGen[outputFile];
+			fs.writeFileSync(sourceMapGen.getSourceMappingFile(),
+							 sourceMapGen.generate());
+		}
+
 	}
 });
 
@@ -170,10 +192,7 @@ var JSX = Class.extend({
 		if (! compiler.compile())
 			process.exit(1);
 
-		if(outputFile == null)
-			process.stdout.write(compiler.getOutput());
-		else
-			fs.writeFileSync(outputFile, compiler.getOutput());
+		platform.writeTo(outputFile, compiler);
 	}
 
 });
