@@ -22,12 +22,12 @@ var SourceMapGenerator = SourceMapGeneratorBase.extend({
 		});
 	},
 
-	add: function (generatedPos, originalPos, source, name) {
+	add: function (generatedPos, originalPos, sourceFile, tokenName) {
 		this._impl.addMapping({
 			generated: generatedPos,
 			original:  originalPos,
-			source: source, // optional
-			name: name // optional
+			source: sourceFile, // optional
+			name: tokenName // optional
 		});
 	},
 
@@ -56,7 +56,7 @@ var NodePlatform = Platform.extend({
 		this._sourceMapGen[file] = new SourceMapGenerator(file, sourceRoot);
 		return this._sourceMapGen[file];
 	},
-	
+
 	// NodePlatform specific methods
 	writeTo: function (outputFile, compiler) {
 		if (outputFile == null) {
@@ -180,7 +180,7 @@ var JSX = Class.extend({
 		if(!hasEmitter)
 			compiler.setEmitter(new JavaScriptEmitter(outputFile,
 													  platform));
-		
+
 		if (argIndex == args.length) {
 			console.error("no files");
 			process.exit(1);
