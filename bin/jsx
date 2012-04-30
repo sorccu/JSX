@@ -40,7 +40,7 @@ var SourceMapGenerator = SourceMapGeneratorBase.extend({
 	},
 
 	magicToken: function () {
-		return "\n" + "// @sourceMappingURL=" +
+		return "\n" + "//@ sourceMappingURL=" +
 			this.getSourceMappingFile() + "\n";
 	}
 });

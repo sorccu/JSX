@@ -108,6 +108,7 @@ window.addEventListener('load', function(e) {
 		output.value = '';
 
 		var c = new jsx.Compiler(platform);
+		c.setEmitter(new jsx.JavaScriptEmitter(null, platform));
 		switch(options.mode) {
 		case "run":
 		case "compile":
