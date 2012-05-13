@@ -21,54 +21,54 @@ var NodePlatform = Platform.extend({
 		return fs.readFileSync(path).toString();
 	},
 
-	save: function (outputFile, content) {
+	save: function (outputFile, content, executable) {
 		if (outputFile == null) {
 			process.stdout.write(content);
 		}
 		else {
 			fs.writeFileSync(outputFile, content);
+			if(executable) {
+				fs.chmod(outputFile, parseInt('0755', 8));
+			}
 		}
 	},
 
-	// called from JavaScriptEmitter
-	addLauncher: function (emitter, sourceFile, targetCode, entryPoint) {
+	// Only platform knows what is node.js (process and file system).
+	addLauncher: function(emitter, targetCode, sourceFile, entryPoint) {
 		if(emitter instanceof JavaScriptEmitter) {
+			targetCode =  "#!" + process.execPath + "\n" + // shebang
+				targetCode;
 
 			var entryPointClass = Util.format("JSX.require('%1').%2",
 											 [ sourceFile, entryPoint ]);
 			switch(entryPoint) {
 			case "_Main":
-				return targetCode +
-					entryPointClass + ".main$AS(process.argv.slice(2));\n";
+				targetCode += entryPointClass +
+					".main$AS(process.argv.slice(2));\n";
+				break;
 			case "_Test":
-				var s = this.load(this.getRoot() + "/src/js/runtest.js");
-				return targetCode + s +
-					Util.format("$__jsx_runTests(%1$, process.argv.slice(2))", [entryPointClass]);
+				targetCode += this.load(this.getRoot() + "/src/js/runtest.js");
+				targetCode += Util.format("$__jsx_runTests(%1$, process.argv.slice(2));\n", [entryPointClass]);
+				break;
 			default:
 				throw new Error("Unknown entry point type: " +
 								entryPoint);
 			}
 		}
 		else {
-			throw new Error("FIXME");
+			throw new Error("FIXME: C++");
 		}
-	}
-});
-
-var JSX = Class.extend({
-	$_meta: null,
-
-	$meta: function (name) {
-		if (JSX._meta === null) {
-			var j = fs.readFileSync( __dirname + "/../package.json" );
-			JSX._meta = JSON.parse(j);
-		}
-		return JSX._meta[name];
+		return targetCode;
 	},
 
-	$execNodeJS: function (script, args) {
-		// XXX: node.js (0.6.x) doesn't suport "--" option :(
-		var argv = ["-e", script].concat(args);
+	run: function (script, args) {
+		var temp = require("temp");
+		var tempfile = temp.openSync("jsx");
+
+		fs.writeSync(tempfile.fd, script);
+		fs.closeSync(tempfile.fd);
+
+		var argv = [tempfile.path].concat(args);
 		var child = child_process.spawn(process.execPath, argv);
 
 		child.stdout.on("data", function (data) {
@@ -80,6 +80,19 @@ var JSX = Class.extend({
 		child.on("exit", function (status) {
 			process.exit(status);
 		});
+	}
+
+});
+
+var JSX = Class.extend({
+	$_meta: null,
+
+	$meta: function (name) {
+		if (JSX._meta === null) {
+			var j = fs.readFileSync( __dirname + "/../package.json" );
+			JSX._meta = JSON.parse(j);
+		}
+		return JSX._meta[name];
 	},
 
 	$printHelp: function () {
@@ -137,8 +150,8 @@ var JSX = Class.extend({
 
 		var emitter = null;
 		var outputFile = null;
-		var executable = false;
-		var run = null;
+		var entryPoint = null;
+		var runImmediately = false;
 		var opt, optarg;
 		while ((opt = getopt()) != null) {
 		NEXTOPT:
@@ -194,14 +207,15 @@ var JSX = Class.extend({
 				});
 				break;
 			case "--executable":
-				executable = true;
-				run = "_Main";
+				entryPoint = "_Main";
 				break;
 			case "--run":
-				run = "_Main";
+				runImmediately = true;
+				entryPoint = "_Main";
 				break;
 			case "--test":
-				run = "_Test";
+				runImmediately = true;
+				entryPoint = "_Test";
 				break;
 			case "--version":
 				console.log(JSX.meta("version"));
@@ -246,11 +260,6 @@ var JSX = Class.extend({
 			process.exit(1);
 		}
 
-		if(executable && outputFile == null) {
-			console.error("--executable requires --output to be specified");
-			process.exit(1);
-		}
-
 		var sourceFile = args[argIndex++];
 		compiler.addSourceFile(null, sourceFile);
 
@@ -274,33 +283,7 @@ var JSX = Class.extend({
 		if (! compiler.compile())
 			process.exit(1);
 
-		var output = emitter.getOutput(sourceFile, run);
-
-		if (run == null || executable) { // compile and save
-			if(emitter instanceof JavaScriptEmitter && executable) {
-				// for CLI executable
-				output =  "#!" + process.execPath + "\n" + output;
-			}
-
-			platform.save(outputFile, output);
-
-			if (emitter instanceof JavaScriptEmitter) {
-				emitter.saveSourceMappingFile(platform);
-			
-				if (executable) {
-					fs.chmodSync(outputFile, "0755");
-				}
-			}
-
-		}
-		else { // compile and run immediately
-			if(emitter instanceof JavaScriptEmitter) {
-				JSX.execNodeJS(output, args.slice(argIndex));
-			}
-			else {
-				throw new Error("FIXME: run C+++ code");
-			}
-		}
+		emitter.finalize(sourceFile, entryPoint, runImmediately, args.slice(argIndex));
 	}
 
 });

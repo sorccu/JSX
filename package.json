@@ -12,6 +12,9 @@
         "email": "fuji.goro@dena.jp"
       }
   ],
+  "dependencies": {
+      "temp": "*"
+  },
   "devDependencies": {
       "browserbuild": "*",
       "source-map": "*"

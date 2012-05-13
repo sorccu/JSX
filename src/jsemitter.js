@@ -1385,14 +1385,6 @@ var JavaScriptEmitter = exports.JavaScriptEmitter = Class.extend({
 		this._sourceMapGen = new SourceMapGenerator(name, sourceRoot);
 	},
 
-	saveSourceMappingFile: function (platform) {
-		var gen = this._sourceMapGen;
-		if(gen != null) {
-			platform.save(this._sourceMapGen.getSourceMappingFile(),
-								this._sourceMapGen.generate());
-		}
-	},
-
 	setSourceMapGenerator: function (gen) {
 		this._sourceMapGen = gen;
 	},
@@ -1535,14 +1527,29 @@ var JavaScriptEmitter = exports.JavaScriptEmitter = Class.extend({
 		return filename;
 	},
 
-	getOutput: function (sourceFile, entryPoint) {
-		var output = entryPoint != null
-			? this._platform.addLauncher(this, this._encodeFilename(sourceFile), this._output, entryPoint)
-			: this._output;
-		if (this._sourceMapGen)
-			return output + this._sourceMapGen.magicToken();
-		else
-			return output;
+	getOutput: function getOutput() {
+		return this._output;
+	},
+
+	finalize: function (sourceFile, entryPoint, runImmediately, runArgs) {
+		var output = this._output;
+		var platform = this._platform;
+
+		if (entryPoint) {
+			output = platform.addLauncher(this, output, sourceFile, entryPoint);
+		}
+
+		if(runImmediately) {
+			platform.run(output, runArgs);
+		}
+		else {
+			var sourceMapGen = this._sourceMapGen;
+			if(sourceMapGen) {
+				output += sourceMapGen.magicToken();
+				platform.save(sourceMapGen.getSourceMappingFile(), sourceMapGen.generate());
+			}
+			platform.save(this._outputFile, output, entryPoint != null);
+		}
 	},
 
 	_emitClassObject: function (classDef) {

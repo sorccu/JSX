@@ -309,7 +309,6 @@ var Compiler = exports.Compiler = Class.extend({
 		}
 		// emit
 		this._emitter.emit(classDefs);
-		this._output = this._emitter.getOutput();
 	},
 
 	_printErrors: function (errors) {
