@@ -20,12 +20,30 @@ var AnalysisContext = exports.AnalysisContext = Class.extend({
 		this.parser = parser;
 		this.instantiateTemplate = instantiateTemplate;
 		this.funcDef = null;
+		/*
+			blockStack is a stack of blocks:
+
+			function f() { // pushes [ localVariableStatutes, funcDef ]
+				...
+				for (...) { // pushes [ localVariableStatuses, forStatement ]
+					...
+				}
+				try { // pushes [ localVariableStatuses, tryStatement ]
+					...
+				} catch (e : Error) { // pushes [ localVariableStatuses, catchStatement ]
+					...
+					function () { // pushes [ localVariableStatuses, funcDef ]
+						...
+					}
+				}
+			}
+		*/
 		this.blockStack = null;
 		this.statement = null;
 	},
 
 	clone: function () {
-		// NOTE: does not clone the blockStack for now (since there is no such use case)
+		// NOTE: does not clone the blockStack (call setBlockStack)
 		return new AnalysisContext(this.errors, this.parser, this.instantiateTemplate).setFuncDef(this.funcDef);
 	},
 
@@ -34,8 +52,8 @@ var AnalysisContext = exports.AnalysisContext = Class.extend({
 		return this;
 	},
 
-	initBlockStack: function (localVariableStatuses) {
-		this.blockStack = [ new BlockContext(localVariableStatuses, null) ];
+	setBlockStack: function (stack) {
+		this.blockStack = stack;
 		return this;
 	},
 
@@ -111,8 +129,16 @@ var ClassDefinition = exports.ClassDefinition = Class.extend({
 		return this._flags;
 	},
 
+	extendName: function () {
+		return this._extendName;
+	},
+
 	extendClassDef: function () {
 		return this._extendClassDef;
+	},
+
+	implementNames: function () {
+		return this._implementNames;
 	},
 
 	implementClassDefs: function () {
@@ -123,15 +149,69 @@ var ClassDefinition = exports.ClassDefinition = Class.extend({
 		return this._members;
 	},
 
+	forEachClassToBase: function (cb) {
+		if (! cb(this))
+			return false;
+		for (var i = this._implementClassDefs.length - 1; i >= 0; --i) {
+			if (! cb(this._implementClassDefs[i]))
+				return false;
+		}
+		if (this._extendClassDef._className != "Object")
+			if (! this._extendClassDef.forEachClassToBase(cb))
+				return false;
+		return true;
+	},
+
+	forEachClassFromBase: function (cb) {
+		if (this._extendClassDef._className != "Object")
+			if (! this._extendClassDef.forEachClassFromBase(cb))
+				return false;
+		for (var i = 0; i < this._implementClassDefs.length; ++i) {
+			if (! cb(this._implementClassDefs[i]))
+				return false;
+		}
+		if (! cb(this))
+			return false;
+		return true;
+	},
+
+	forEachMember: function (cb) {
+		for (var i = 0; i < this._members.length; ++i) {
+			if (! cb(this._members[i]))
+				return false;
+		}
+		return true;
+	},
+
+	forEachMemberVariable: function (cb) {
+		for (var i = 0; i < this._members.length; ++i) {
+			if (this._members[i] instanceof MemberVariableDefinition) {
+				if (! cb(this._members[i]))
+					return false;
+			}
+		}
+		return true;
+	},
+
+	forEachMemberFunction: function (cb) {
+		for (var i = 0; i < this._members.length; ++i) {
+			if (this._members[i] instanceof MemberFunctionDefinition) {
+				if (! cb(this._members[i]))
+					return false;
+			}
+		}
+		return true;
+	},
+
 	$GET_MEMBER_MODE_ALL: 0, // looks for functions or variables from the class and all super classes
 	$GET_MEMBER_MODE_CLASS_ONLY: 1, // looks for functions or variables within the class
 	$GET_MEMBER_MODE_SUPER: 2, // looks for functions with body in super classes
 	$GET_MEMBER_MODE_FUNCTION_WITH_BODY: 3, // looks for function with body
 	
-	getMemberTypeByName: function (name, mode) {
+	getMemberTypeByName: function (name, isStatic, mode) {
 		// returns an array to support function overloading
 		var types = [];
-		this._getMemberTypesByName(types, name, mode);
+		this._getMemberTypesByName(types, name, isStatic, mode);
 		switch (types.length) {
 		case 0:
 			return null;
@@ -142,11 +222,12 @@ var ClassDefinition = exports.ClassDefinition = Class.extend({
 		}
 	},
 
-	_getMemberTypesByName: function (types, name, mode) {
+	_getMemberTypesByName: function (types, name, isStatic, mode) {
 		if (mode != ClassDefinition.GET_MEMBER_MODE_SUPER) {
 			for (var i = 0; i < this._members.length; ++i) {
 				var member = this._members[i];
-				if (name == member.name()) {
+				if (isStatic == ((member.flags() & ClassDefinition.IS_STATIC) != 0)
+					&& name == member.name()) {
 					if (member instanceof MemberVariableDefinition) {
 						if ((member.flags() & ClassDefinition.IS_OVERRIDE) == 0) {
 							var type = member.getType();
@@ -175,9 +256,9 @@ var ClassDefinition = exports.ClassDefinition = Class.extend({
 		}
 		if (mode != ClassDefinition.GET_MEMBER_MODE_CLASS_ONLY) {
 			if (this._extendClassDef != null)
-				this._extendClassDef._getMemberTypesByName(types, name, mode);
+				this._extendClassDef._getMemberTypesByName(types, name, isStatic, mode);
 			for (var i = 0; i < this._implementClassDefs.length; ++i)
-				this._implementClassDefs[i]._getMemberTypesByName(types, name, mode);
+				this._implementClassDefs[i]._getMemberTypesByName(types, name, isStatic, mode);
 		}
 	},
 
@@ -235,6 +316,19 @@ var ClassDefinition = exports.ClassDefinition = Class.extend({
 	},
 
 	analyze: function (context) {
+		// create default constructor if no constructors exist
+		if (this.forEachMemberFunction(function (funcDef) { return funcDef.name() != "constructor"; })) {
+			var Parser = require("./parser");
+			var func = new MemberFunctionDefinition(
+				this._token,
+				new Parser.Token("constructor", true, null, 0, 0), // FIXME
+				ClassDefinition.IS_FINAL,
+				Type.Type.voidType,
+				[], [], [], [],
+				this._token /* FIXME */);
+			func.setClassDef(this);
+			this._members.push(func);
+		}
 		// check that the class may be extended
 		if (! this._assertInheritanceIsNotInLoop(context, null, this.getToken()))
 			return false;
@@ -322,6 +416,97 @@ var ClassDefinition = exports.ClassDefinition = Class.extend({
 			if (member instanceof MemberVariableDefinition)
 				member.getType();
 		}
+	},
+
+	determineCallees: function () {
+		var Expression = require("./expression");
+		var Statement = require("./statement");
+
+		var findCallingFunctionInClass = function (classDef, funcName, argTypes, isStatic) {
+			var found = null;
+			classDef.forEachMemberFunction(function (funcDef) {
+				if (isStatic == ((funcDef.flags() & ClassDefinition.IS_STATIC) != 0)
+					&& funcDef.name() == funcName
+					&& Util.typesAreEqual(funcDef.getArgumentTypes(), argTypes)) {
+					found = funcDef;
+					return false;
+				}
+				return true;
+			});
+			// only return if the found function is final
+			if (found != null) {
+				if ((found.flags() & (ClassDefinition.IS_STATIC | ClassDefinition.IS_FINAL)) == 0)
+					found = null;
+			}
+			return found;
+		};
+		var findCallingFunction = function (classDef, funcName, argTypes, isStatic) {
+			var found = null;
+			// find the first declaration
+			classDef.forEachClassToBase(function (classDef) {
+				if ((found = findCallingFunctionInClass(classDef, funcName, argTypes, isStatic)) != null)
+					return false;
+				return true;
+			});
+			return found;
+		};
+
+		// iterate
+		this.forEachMemberFunction(function onElement(element) {
+
+			if (element instanceof Statement.ConstructorInvocationStatement) {
+
+				// invocation of super-class ctor
+				var ctorType = element.getConstructorType();
+				if (ctorType != null) {
+					// FIXME we should better create an empty ctor for classes with no ctor
+					var callingFuncDef = findCallingFunctionInClass(
+						element.getConstructingClassDef(),
+						"constructor",
+						ctorType.getArgumentTypes(),
+						false);
+					if (callingFuncDef == null)
+						throw new Error("could not determine the associated parent ctor");
+					element.setCallingFuncDef(callingFuncDef);
+				}
+
+			} else if (element instanceof Expression.CallExpression) {
+
+				// call expression
+				var calleeExpr = element.getExpr();
+				if (calleeExpr instanceof Expression.PropertyExpression && ! calleeExpr.getType().isAssignable()) {
+					// is referring to function (not a value of function type)
+					var holderType = calleeExpr.getHolderType();
+					var callingFuncDef = findCallingFunction(
+							holderType.getClassDef(),
+							calleeExpr.getIdentifierToken().getValue(),
+							calleeExpr.getType().getArgumentTypes(),
+							holderType instanceof Type.ClassDefType);
+					element.setCallingFuncDef(callingFuncDef);
+				} else if (calleeExpr instanceof Expression.FunctionExpression) {
+					element.setCallingFuncDef(calleeExpr.getFuncDef());
+				}
+
+			} else if (element instanceof Expression.NewExpression) {
+
+				/*
+					For now we do not do anything here, since all objects should be created by the JS new operator,
+					or will fail in operations like obj.func().
+				*/
+
+			}
+
+			// iterate
+			element.forEachCodeElement(onElement);
+			return true;
+
+		}.bind(this));
+
+		// calculate call depth of each function
+		this.forEachMemberFunction(function (funcDef) {
+			funcDef.getCallDepth();
+			return true;
+		});
 	},
 
 	isConvertibleTo: function (classDef) {
@@ -591,7 +776,7 @@ var MemberVariableDefinition = exports.MemberVariableDefinition = MemberDefiniti
 		return {
 			"name"         : this.name(),
 			"flags"        : this.flags(),
-			"type"         : this._type.serialize(),
+			"type"         : Util.serializeNullable(this._type),
 			"initialValue" : Util.serializeNullable(this._initialValue)
 		};
 	},
@@ -654,6 +839,7 @@ var MemberFunctionDefinition = exports.MemberFunctionDefinition = MemberDefiniti
 			for (var i = 0; i < this._closures.length; ++i)
 				this._closures[i].setParent(this);
 		}
+		this._callDepth = -1; // -1 => undetermined, 0 if not inlinable (= leaf), 1 => calls a leaf function, 2...
 	},
 
 	instantiate: function (instantiationContext) {
@@ -674,7 +860,8 @@ var MemberFunctionDefinition = exports.MemberFunctionDefinition = MemberDefiniti
 
 	serialize: function () {
 		return {
-			"name"       : this.name(),
+			"token"      : this._token.serialize(),
+			"nameToken"  : Util.serializeNullable(this._nameToken),
 			"flags"      : this.flags(),
 			"returnType" : this._returnType.serialize(),
 			"args"       : Util.serializeArray(this._args),
@@ -683,53 +870,121 @@ var MemberFunctionDefinition = exports.MemberFunctionDefinition = MemberDefiniti
 		};
 	},
 
-	analyze: function (context) {
+	analyze: function (outerContext) {
 		// return if is abtract (wo. function body) or is native
 		if (this._statements == null)
 			return;
 
 		// setup context
-		var context = context.clone().setFuncDef(this)
-			.initBlockStack(new LocalVariableStatuses(this, this._parent != null ? context.getTopBlock().localVariableStatuses : null));
+		var context = outerContext.clone().setFuncDef(this);
+		if (this._parent == null) {
+			context.setBlockStack([ new BlockContext(new LocalVariableStatuses(this, null), this) ]);
+		} else {
+			context.setBlockStack(outerContext.blockStack);
+			context.blockStack.push(new BlockContext(new LocalVariableStatuses(this, outerContext.getTopBlock().localVariableStatuses), this));
+		}
 
-		// do the checks
-		for (var i = 0; i < this._statements.length; ++i)
-			if (! this._statements[i].analyze(context))
-				break;
-		if (! this._returnType.equals(Type.Type.voidType) && context.getTopBlock().localVariableStatuses != null)
-			context.errors.push(new CompileError(this._lastTokenOfBody, "missing return statement"));
+		try {
 
-		// check that from the constructor, all constructors with non-zero
-		// arguments are called, and that the calls are in the implemented order
-		if (this.getNameToken() == null || this.name() != "constructor")
-			return;
-
-		// constructor
-		var Statement = require("./statement"); // seems that we need to delay the load
-		var nextConstructorIndex = -1;
-		for (var i = 0; i < this._statements.length; ++i) {
-			var statement = this._statements[i];
-			if (! (statement instanceof Statement.ConstructorInvocationStatement))
-				break;
-			for (; nextConstructorIndex < this._classDef.implementClassDefs().length; ++nextConstructorIndex) {
-				var baseClassDef = nextConstructorIndex == -1 ? this._classDef.extendClassDef() : this._classDef.implementClassDefs()[nextConstructorIndex];
-				if (baseClassDef == statement.getConstructingClassDef())
+			// do the checks
+			for (var i = 0; i < this._statements.length; ++i)
+				if (! this._statements[i].analyze(context))
 					break;
-				// constructor of baseClassDef is not called; assert that it has a zero-argument constructor (or has no constructor at all)
-				if (! baseClassDef.hasDefaultConstructor())
-					context.errors.push(new CompileError(statement.getQualifiedName().getToken(), "constructor of class '" + baseClassDef.className() + "' should be called prior to the statement"));
+			if (! this._returnType.equals(Type.Type.voidType) && context.getTopBlock().localVariableStatuses != null)
+				context.errors.push(new CompileError(this._lastTokenOfBody, "missing return statement"));
+
+			if (this.getNameToken() != null && this.name() == "constructor")
+				this._fixupConstructor(context);
+
+		} finally {
+			context.blockStack.pop();
+		}
+
+	},
+
+	_fixupConstructor: function (context) {
+		var Statement = require("./statement"); // seems that we need to delay the load
+
+		var stmtIndex = 0;
+		// make implicit calls to default constructor explicit
+		for (var baseIndex = 0; baseIndex <= this._classDef.implementClassDefs().length; ++baseIndex) {
+			var baseClassDef = baseIndex == 0 ? this._classDef.extendClassDef() : this._classDef.implementClassDefs()[baseIndex - 1];
+			if (stmtIndex < this._statements.length
+				&& this._statements[stmtIndex] instanceof Statement.ConstructorInvocationStatement
+				&& baseClassDef == this._statements[stmtIndex].getConstructingClassDef()) {
+				// explicit call to the base class, no need to complement
+				if (baseClassName == "Object")
+					this._statements.splice(stmtIndex, 1);
+				else
+					++stmtIndex;
+			} else {
+				// insert call to the default constructor
+				var baseClassName = baseIndex == 0 ? this._classDef.extendName() : this._classDef.implementNames()[baseIndex - 1];
+				if (baseClassName == null || baseClassName.getToken().getValue() == "Object") {
+					// we can omit the call
+				} else if (baseClassDef.hasDefaultConstructor()) {
+					var ctorStmt = new Statement.ConstructorInvocationStatement(baseClassName, []);
+					this._statements.splice(stmtIndex, 0, ctorStmt);
+					if (! ctorStmt.analyze(context))
+						throw new Error("logic flaw");
+					++stmtIndex;
+				} else {
+					if (stmtIndex < this._statements.length) {
+						context.errors.push(new CompileError(this._statements[stmtIndex].getToken(), "constructor of class '" + baseClassName.getToken().getValue() + "' should be called prior to the statement"));
+					} else {
+						context.errors.push(new CompileError(this._token, "super class '" + baseClassName.getToken().getValue() + "' should be initialized explicitely (no default constructor)"));
+					}
+				}
 			}
-			if (nextConstructorIndex == this._classDef.implementClassDefs().length) {
-				context.errors.push(new CompileError(statement.getQualifiedName().getToken(), "constructors should be called in the order the base classes are extended / implemented"));
+		}
+		for (; stmtIndex < this._statements.length; ++stmtIndex) {
+			if (! (this._statements[stmtIndex] instanceof Statement.ConstructorInvocationStatement))
 				break;
-			}
-			++nextConstructorIndex;
+			context.errors.push(new CompileError(this._statements[stmtIndex].getToken(), "constructors should be invoked in the order they are implemented"));
 		}
-		for (; nextConstructorIndex < this._classDef.implementClassDefs().length; ++nextConstructorIndex) {
-			var baseClassDef = nextConstructorIndex == -1 ? this._classDef.extendClassDef() : this._classDef.implementClassDefs()[nextConstructorIndex];
-			if (! baseClassDef.hasDefaultConstructor())
-					context.errors.push(new CompileError(this._token, "constructor of class '" + baseClassDef.className() + "' should be called explicitely"));
+	},
+
+	getCallDepth: function () {
+		var Expression = require("./expression");
+		var Statement = require("./statement");
+
+		switch (this._callDepth) {
+		case -1: // not ready
+			/*
+				Change this._callDepth to -2 to indicate that the analysis of the function has started.
+				The depth is calculated using the local variable "depth", and upon completion, stores the value to this._callDepth if no loop was detected.
+				If a loop is detected, this_callDepth is set to zero at the very moment.
+			*/
+			this._callDepth = -2; // used to indicate a loop
+			var depth = -1;
+			this.forEachCodeElement(function onElement(element) {
+				if (element instanceof Expression.CallExpression || element instanceof Statement.ConstructorInvocationStatement) {
+					var callee = element.getCallingFuncDef();
+					if (callee != null) {
+						var depthOfCallee = callee.getCallDepth();
+						if (depth == -1) {
+							depth = depthOfCallee + 1;
+						} else {
+							depth = Math.min(this._callDepth, depthOfCallee + 1);
+						}
+					}
+				}
+				// skip the closures
+				if (! (element instanceof Expression.FunctionExpression)) {
+					element.forEachCodeElement(onElement.bind(this));
+				}
+				return true;
+			}.bind(this));
+			if (this._callDepth == -2)
+				this._callDepth = depth;
+			break;
+		case -2: // looping
+			this._callDepth = 0;
+			break;
+		default: // already calculated
+			break;
 		}
+		return this._callDepth;
 	},
 
 	getReturnType: function () {
@@ -769,19 +1024,30 @@ var MemberFunctionDefinition = exports.MemberFunctionDefinition = MemberDefiniti
 	},
 
 	// return an argument or a local variable
-	getLocal: function (name) {
-		for (var i = 0; i < this._locals.length; ++i) {
-			var local = this._locals[i];
-			if (local.getName().getValue() == name)
-				return local;
+	getLocal: function (context, name) {
+		var Statement = require("./statement");
+		// for the current function, check the caught variables
+		for (var i = context.blockStack.length - 1; i >= 0; --i) {
+			var block = context.blockStack[i].statement;
+			if (block instanceof MemberFunctionDefinition) {
+				// function scope
+				for (var j = 0; j < block._locals.length; ++j) {
+					var local = block._locals[j];
+					if (local.getName().getValue() == name)
+						return local;
+				}
+				for (var j = 0; j < block._args.length; ++j) {
+					var arg = block._args[j];
+					if (arg.getName().getValue() == name)
+						return arg;
+				}
+			} else if (block instanceof Statement.CatchStatement) {
+				// catch statement
+				var local = block.getLocal();
+				if (local.getName().getValue() == name)
+					return local;
+			}
 		}
-		for (var i = 0; i < this._args.length; ++i) {
-			var arg = this._args[i];
-			if (arg.getName().getValue() == name)
-				return arg;
-		}
-		if (this._parent != null)
-			return this._parent.getLocal(name);
 		return null;
 	},
 
@@ -789,6 +1055,10 @@ var MemberFunctionDefinition = exports.MemberFunctionDefinition = MemberDefiniti
 		return (this._flags & ClassDefinition.IS_STATIC) != 0
 			? new Type.StaticFunctionType(this._returnType, this.getArgumentTypes(), false)
 			: new Type.MemberFunctionType(new Type.ObjectType(this._classDef), this._returnType, this.getArgumentTypes(), false);
+	},
+
+	forEachCodeElement: function (cb) {
+		return Util.forEachCodeElement(cb, this._statements);
 	}
 
 });
@@ -850,6 +1120,18 @@ var LocalVariable = exports.LocalVariable = Class.extend({
 	}
 });
 
+var CaughtVariable = exports.CaughtVariable = LocalVariable.extend({
+
+	constructor: function (name, type) {
+		LocalVariable.prototype.constructor.call(this, name, type);
+	},
+
+	touchVariable: function (context, token, isAssignment) {
+		return true;
+	}
+
+});
+
 var ArgumentDeclaration = exports.ArgumentDeclaration = LocalVariable.extend({
 
 	constructor: function (name, type) {
@@ -877,8 +1159,11 @@ var LocalVariableStatuses = exports.LocalVariableStatuses = Class.extend({
 		case 2: // (funcDef : MemberFunctionDefinition, baseStatuses : LocalVariableStatuses)
 			var funcDef = arguments[0];
 			var base = arguments[1];
-			if (base != null)
-				this._copyFrom(base);
+			if (base != null) {
+				// FIXME the analysis of the closures should be delayed to either of: first being used, or return is called, to minimize the appearance of the "not initialized" error
+				for (var k in base._statuses)
+					this._statuses[k] = base._statuses[k] == LocalVariableStatuses.UNSET ? LocalVariableStatuses.MAYBESET : base._statuses[k];
+			}
 			var args = funcDef.getArguments();
 			for (var i = 0; i < args.length; ++i)
 				this._statuses[args[i].getName().getValue()] = LocalVariableStatuses.ISSET;

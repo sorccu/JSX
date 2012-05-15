@@ -24,6 +24,8 @@ var Expression = exports.Expression = Class.extend({
 		return null;
 	},
 
+	forEachCodeElement: null, // function forEachCodeElement(cb : function (expr)) : boolean
+
 	assertIsAssignable: function (context, token, type) {
 		context.errors.push(new CompileError(token, "left-hand-side expression is not assignable"));
 		return false;
@@ -38,6 +40,18 @@ var Expression = exports.Expression = Class.extend({
 			context.errors.push(new CompileError(token, "cannot assign a value of type '" + rhsType.toString() + "' to '" + lhsType.toString() + "'"));
 			return false;
 		}
+		return true;
+	}
+
+});
+
+var LeafExpression = exports.LeafExpression = Expression.extend({
+
+	constructor: function (token) {
+		Expression.prototype.constructor.call(this, token);
+	},
+
+	forEachCodeElement: function (cb) {
 		return true;
 	}
 
@@ -64,12 +78,16 @@ var OperatorExpression = exports.OperatorExpression = Expression.extend({
 
 // primary expressions
 
-var IdentifierExpression = exports.IdentifierExpression = Expression.extend({
+var IdentifierExpression = exports.IdentifierExpression = LeafExpression.extend({
 
 	constructor: function (token) {
-		Expression.prototype.constructor.call(this, token);
+		LeafExpression.prototype.constructor.call(this, token);
 		this._local = null;
 		this._classDefType = null;
+	},
+
+	getLocal: function () {
+		return this._local;
 	},
 
 	serialize: function () {
@@ -90,7 +108,7 @@ var IdentifierExpression = exports.IdentifierExpression = Expression.extend({
 
 	analyze: function (context, parentExpr) {
 		// if it is an access to local variable, return ok
-		if (context.funcDef != null && (this._local = context.funcDef.getLocal(this._token.getValue())) != null) {
+		if (context.funcDef != null && (this._local = context.funcDef.getLocal(context, this._token.getValue())) != null) {
 			// check that the variable is readable
 			if ((parentExpr instanceof AssignmentExpression && parentExpr.getFirstExpr() == this)
 				|| (parentExpr == null && context.statement instanceof Statement.ForInStatement && context.statement.getLHSExpr() == this)) {
@@ -144,10 +162,10 @@ var IdentifierExpression = exports.IdentifierExpression = Expression.extend({
 
 });
 
-var UndefinedExpression = exports.UndefinedExpression = Expression.extend({
+var UndefinedExpression = exports.UndefinedExpression = LeafExpression.extend({
 
 	constructor: function (token) {
-		Expression.prototype.constructor.call(this, token);
+		LeafExpression.prototype.constructor.call(this, token);
 	},
 
 	serialize: function () {
@@ -167,10 +185,10 @@ var UndefinedExpression = exports.UndefinedExpression = Expression.extend({
 
 });
 
-var NullExpression = exports.NullExpression = Expression.extend({
+var NullExpression = exports.NullExpression = LeafExpression.extend({
 
 	constructor: function (token, type) {
-		Expression.prototype.constructor.call(this, token);
+		LeafExpression.prototype.constructor.call(this, token);
 		this._type = type;
 	},
 
@@ -192,10 +210,10 @@ var NullExpression = exports.NullExpression = Expression.extend({
 
 });
 
-var BooleanLiteralExpression = exports.BooleanLiteralExpression = Expression.extend({
+var BooleanLiteralExpression = exports.BooleanLiteralExpression = LeafExpression.extend({
 
 	constructor: function (token) {
-		Expression.prototype.constructor.call(this, token);
+		LeafExpression.prototype.constructor.call(this, token);
 	},
 
 	serialize: function () {
@@ -215,10 +233,10 @@ var BooleanLiteralExpression = exports.BooleanLiteralExpression = Expression.ext
 
 });
 
-var IntegerLiteralExpression = exports.IntegerLiteralExpression = Expression.extend({
+var IntegerLiteralExpression = exports.IntegerLiteralExpression = LeafExpression.extend({
 
 	constructor: function (token) {
-		Expression.prototype.constructor.call(this, token);
+		LeafExpression.prototype.constructor.call(this, token);
 	},
 
 	serialize: function () {
@@ -239,10 +257,10 @@ var IntegerLiteralExpression = exports.IntegerLiteralExpression = Expression.ext
 });
 
 
-var NumberLiteralExpression = exports.NumberLiteralExpression = Expression.extend({
+var NumberLiteralExpression = exports.NumberLiteralExpression = LeafExpression.extend({
 
 	constructor: function (token) {
-		Expression.prototype.constructor.call(this, token);
+		LeafExpression.prototype.constructor.call(this, token);
 	},
 
 	serialize: function () {
@@ -262,10 +280,10 @@ var NumberLiteralExpression = exports.NumberLiteralExpression = Expression.exten
 
 });
 
-var StringLiteralExpression = exports.StringLiteralExpression = Expression.extend({
+var StringLiteralExpression = exports.StringLiteralExpression = LeafExpression.extend({
 
 	constructor: function (token) {
-		Expression.prototype.constructor.call(this, token);
+		LeafExpression.prototype.constructor.call(this, token);
 	},
 
 	serialize: function () {
@@ -285,10 +303,10 @@ var StringLiteralExpression = exports.StringLiteralExpression = Expression.exten
 
 });
 
-var RegExpLiteralExpression = exports.RegExpLiteralExpression = Expression.extend({
+var RegExpLiteralExpression = exports.RegExpLiteralExpression = LeafExpression.extend({
 
 	constructor: function (token) {
-		Expression.prototype.constructor.call(this, token);
+		LeafExpression.prototype.constructor.call(this, token);
 		this._type = null;
 	},
 
@@ -387,6 +405,12 @@ var ArrayLiteralExpression = exports.ArrayLiteralExpression = Expression.extend(
 			}
 		}
 		return succeeded;
+	},
+
+	forEachCodeElement: function (cb) {
+		if (! Util.forEachCodeElement(cb, this._exprs))
+			return false;
+		return true;
 	}
 
 });
@@ -404,6 +428,13 @@ var MapLiteralElement = exports.MapLiteralElement = Class.extend({
 
 	getExpr: function () {
 		return this._expr;
+	},
+
+	serialize: function () {
+		return [
+			this._key.serialize(),
+			this._expr.serialize()
+		];
 	}
 
 });
@@ -482,6 +513,13 @@ var MapLiteralExpression = exports.MapLiteralExpression = Expression.extend({
 			}
 		}
 		return succeeded;
+	},
+
+	forEachCodeElement: function (cb) {
+		for (var i = 0; i < this._elements.length; ++i)
+			if (! cb(this._elements[i].getExpr()))
+				return false;
+		return true;
 	}
 
 });
@@ -515,6 +553,10 @@ var ThisExpression = exports.ThisExpression = Expression.extend({
 
 	getType: function () {
 		return new ObjectType(this._classDef);
+	},
+
+	forEachCodeElement: function (cb) {
+		return true;
 	}
 
 });
@@ -544,6 +586,10 @@ var FunctionExpression = exports.FunctionExpression = Expression.extend({
 
 	getType: function () {
 		return new StaticFunctionType(this._funcDef.getReturnType(), this._funcDef.getArgumentTypes(), false);
+	},
+
+	forEachCodeElement: function (cb) {
+		return cb(this._funcDef);
 	}
 
 });
@@ -577,6 +623,10 @@ var UnaryExpression = exports.UnaryExpression = OperatorExpression.extend({
 			return false;
 		}
 		return true;
+	},
+
+	forEachCodeElement: function (cb) {
+		return cb(this._expr);
 	}
 
 });
@@ -860,6 +910,10 @@ var PropertyExpression = exports.PropertyExpression = UnaryExpression.extend({
 			context.errors.push(new CompileError(this._identifierToken, "cannot obtain a member of null"));
 			return false;
 		}
+		if (exprType.resolveIfMayBeUndefined().equals(Type.variantType)) {
+			context.errors.push(new CompileError(this._identifierToken, "cannot obtain a member of variant, use: (<<expr>> as Map.<type>)[<<name>>]"));
+			return false;
+		}
 		var classDef = exprType.getClassDef();
 		if (classDef == null) {
 			context.errors.push(new CompileError(this._identifierToken, "cannot determine type due to preceding errors"));
@@ -867,6 +921,7 @@ var PropertyExpression = exports.PropertyExpression = UnaryExpression.extend({
 		}
 		this._type = classDef.getMemberTypeByName(
 			this._identifierToken.getValue(),
+			exprType instanceof ClassDefType,
 			(exprType instanceof ClassDefType) ? ClassDefinition.GET_MEMBER_MODE_CLASS_ONLY : ClassDefinition.GET_MEMBER_MODE_ALL);
 		if (this._type == null) {
 			context.errors.push(new CompileError(this._identifierToken, "'" + exprType.toString() + "' does not have a property named '" + this._identifierToken.getValue() + "'"));
@@ -983,6 +1038,14 @@ var BinaryExpression = exports.BinaryExpression = OperatorExpression.extend({
 		if (! this._expr2.analyze(context, this))
 			return false;
 		return true;
+	},
+
+	forEachCodeElement: function (cb) {
+		if (! cb(this._expr1))
+			return false;
+		if (! cb(this._expr2))
+			return false;
+		return true;
 	}
 
 });
@@ -1018,7 +1081,6 @@ var AdditiveExpression = exports.AdditiveExpression = BinaryExpression.extend({
 	getType: function () {
 		return this._type;
 	}
-
 });
 
 var ArrayExpression = exports.ArrayExpression = BinaryExpression.extend({
@@ -1035,23 +1097,34 @@ var ArrayExpression = exports.ArrayExpression = BinaryExpression.extend({
 			context.errors.push(new CompileError(this._token, "cannot determine type due to preceding errors"));
 			return false;
 		}
-		var expr1ClassDef = this._expr1.getType().getClassDef();
-		if (expr1ClassDef instanceof InstantiatedClassDefinition && expr1ClassDef.getTemplateClassName() == "Array") {
-			if (! this._expr2.getType().isConvertibleTo(Type.integerType)) {
-				context.errors.push(new CompileError(this._token, "array index should be a number"));
-				return false;
-			}
-			this._type = expr1ClassDef.getTypeArguments()[0].toMayBeUndefinedType();
-		} else if (expr1ClassDef instanceof InstantiatedClassDefinition && expr1ClassDef.getTemplateClassName() == "Map") {
-			if (! this._expr2.getType().isConvertibleTo(Type.stringType)) {
-				context.errors.push(new CompileError(this._token, "hash key should be a string"));
-				return false;
-			}
-			this._type = expr1ClassDef.getTypeArguments()[0].toMayBeUndefinedType();
-		} else {
-			context.errors.push(new CompileError(this._token, "cannot apply operator '[]' (only applicable to an array or a hash)"));
+		// obtain classDef
+		var expr1Type = this._expr1.getType().resolveIfMayBeUndefined();
+		if (! (expr1Type instanceof ObjectType)) {
+			context.errors.push(new CompileError(this._token, "cannot apply operator[] against a non-object"));
 			return false;
 		}
+		var expr1ClassDef = expr1Type.getClassDef();;
+		// obtain type of operator []
+		var accessorType = expr1ClassDef.getMemberTypeByName("__native_index_operator__", false, ClassDefinition.GET_MEMBER_MODE_ALL);
+		if (accessorType == null) {
+			context.errors.push(new CompileError(this._token, "cannot apply operator[] on an instance of class '" + expr1ClassDef.className() + "'"));
+			return false;
+		}
+		if (accessorType instanceof FunctionChoiceType) {
+			context.errors.push(new CompileError(this._token, "override of '__native_index_operator__' is not supported"));
+			return false;
+		}
+		if (accessorType.getArgumentTypes().length != 1) {
+			context.errors.push(new CompileError(this._token, "unexpected number of arguments taken by '__native_index_operator__'"));
+			return false;
+		}
+		// check type of expr2
+		if (! this._expr2.getType().isConvertibleTo(accessorType.getArgumentTypes()[0])) {
+			context.errors.push(new CompileError(this._token, "index type is incompatible (expected '" + accessorType.getArgumentTypes()[0].toString() + "', got '" + this._expr2.getType().toString() + "'"));
+			return false;
+		}
+		// set type of the expression
+		this._type = accessorType.getReturnType();
 		return true;
 	},
 
@@ -1195,7 +1268,27 @@ var EqualityExpression = exports.EqualityExpression = BinaryExpression.extend({
 var InExpression = exports.InExpression = BinaryExpression.extend({
 
 	constructor: function (operatorToken, expr1, expr2) {
-		throw new Error("FIXME");
+		BinaryExpression.prototype.constructor.call(this, operatorToken, expr1, expr2);
+	},
+
+	analyze: function (context, parentExpr) {
+		if (! this._analyze(context))
+			return false;
+		if (! this._expr1.getType().resolveIfMayBeUndefined().equals(Type.stringType)) {
+			context.errors.push(new CompileError(this._token, "left operand of 'in' expression should be a string"));
+			return false;
+		}
+		var expr2Type;
+		var expr2ClassDef;
+		if ((expr2Type = this._expr2.getType().resolveIfMayBeUndefined()) instanceof ObjectType
+			&& (expr2ClassDef = expr2Type.getClassDef()) instanceof InstantiatedClassDefinition
+			&& expr2ClassDef.getTemplateClassName() == "Map") {
+			// ok
+		} else {
+			context.errors.push(new CompileError(this._token, "right operand of 'in' expression should be a map"));
+			return false;
+		}
+		return true;
 	},
 
 	getType: function () {
@@ -1317,6 +1410,16 @@ var ConditionalExpression = exports.ConditionalExpression = OperatorExpression.e
 
 	getType: function () {
 		return this._type;
+	},
+
+	forEachCodeElement: function (cb) {
+		if (! cb(this._condExpr))
+			return false;
+		if (this._ifTrueExpr != null && ! cb(this._ifTrueExpr))
+			return false;
+		if (! cb(this._ifFalseExpr))
+			return false;
+		return true;
 	}
 
 });
@@ -1329,6 +1432,7 @@ var CallExpression = exports.CallExpression = OperatorExpression.extend({
 		OperatorExpression.prototype.constructor.call(this, operatorToken);
 		this._expr = expr;
 		this._args = args;
+		this._callingFuncDef = null; // should become an interface, see ConstructorInvocationStatement
 	},
 
 	getExpr: function () {
@@ -1337,6 +1441,14 @@ var CallExpression = exports.CallExpression = OperatorExpression.extend({
 
 	getArguments: function () {
 		return this._args;
+	},
+
+	getCallingFuncDef: function () {
+		return this._callingFuncDef;
+	},
+
+	setCallingFuncDef: function (funcDef) {
+		this._callingFuncDef = funcDef;
 	},
 
 	serialize: function () {
@@ -1360,6 +1472,7 @@ var CallExpression = exports.CallExpression = OperatorExpression.extend({
 			return false;
 		}
 		if (this._expr instanceof PropertyExpression
+			&& ! exprType.isAssignable()
 			&& this._expr.deduceByArgumentTypes(context, this._token, argTypes, (this._expr.getHolderType() instanceof ClassDefType)) == null)
 			return false;
 		return true;
@@ -1367,6 +1480,14 @@ var CallExpression = exports.CallExpression = OperatorExpression.extend({
 
 	getType: function () {
 		return this._expr.getType().getReturnType();
+	},
+
+	forEachCodeElement: function (cb) {
+		if (! cb(this._expr))
+			return false;
+		if (! Util.forEachCodeElement(this._args))
+			return false;
+		return true;
 	}
 
 });
@@ -1415,7 +1536,7 @@ var SuperExpression = exports.SuperExpression = OperatorExpression.extend({
 			return false;
 		// lookup function
 		var funcType = null;
-		if ((funcType = classDef.getMemberTypeByName(this._name.getValue(), ClassDefinition.GET_MEMBER_MODE_SUPER)) == null) {
+		if ((funcType = classDef.getMemberTypeByName(this._name.getValue(), false, ClassDefinition.GET_MEMBER_MODE_SUPER)) == null) {
 			context.errors.push(new CompileError(this._token, "could not find a member function with given name in super classes of class '" + classDef.className() + "'"));
 			return false;
 		}
@@ -1428,6 +1549,12 @@ var SuperExpression = exports.SuperExpression = OperatorExpression.extend({
 
 	getType: function () {
 		return this._funcType.getReturnType();
+	},
+
+	forEachCodeElement: function (cb) {
+		if (! Util.forEachCodeElement(this._args))
+			return false;
+		return true;
 	}
 
 });
@@ -1474,7 +1601,7 @@ var NewExpression = exports.NewExpression = OperatorExpression.extend({
 		var argTypes = Util.analyzeArgs(context, this._args);
 		if (argTypes == null)
 			return false;
-		var ctors = classDef.getMemberTypeByName("constructor", ClassDefinition.GET_MEMBER_MODE_CLASS_ONLY);
+		var ctors = classDef.getMemberTypeByName("constructor", false, ClassDefinition.GET_MEMBER_MODE_CLASS_ONLY);
 		if (ctors != null) {
 			if ((this._constructor = ctors.deduceByArgumentTypes(context, this._token, argTypes, false)) == null) {
 				context.errors.push(new CompileError(this._token, "cannot create an object of type '" + this._qualifiedName.getToken().getValue() + "', arguments mismatch"));
@@ -1491,6 +1618,12 @@ var NewExpression = exports.NewExpression = OperatorExpression.extend({
 
 	getConstructor: function () {
 		return this._constructor;
+	},
+
+	forEachCodeElement: function (cb) {
+		if (! Util.forEachCodeElement(this._args))
+			return false;
+		return true;
 	}
 
 });
@@ -1528,6 +1661,14 @@ var CommaExpression = exports.CommaExpression = Expression.extend({
 
 	getType: function () {
 		return this._expr2.getType();
+	},
+
+	forEachCodeElement: function (cb) {
+		if (! cb(this._expr1))
+			return false;
+		if (! cb(this._expr2))
+			return false;
+		return true;
 	}
 
 });

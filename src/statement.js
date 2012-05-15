@@ -17,10 +17,12 @@ var Statement = exports.Statement = Class.extend({
 			return this.doAnalyze(context);
 		} catch (e) {
 			var token = this.getToken();
-			console.log("fatal error while compiling statement at file: " + token.getFilename() + ", line " + token.getLineNumber());
+			console.error("fatal error while compiling statement at file: " + token.getFilename() + ", line " + token.getLineNumber());
 			throw e;
 		}
 	},
+
+	forEachCodeElement: null, // iterates through the statements / expressions, returns bool
 
 	getToken: null, // returns a token of the statement
 
@@ -56,18 +58,11 @@ var ConstructorInvocationStatement = exports.ConstructorInvocationStatement = St
 		this._args = args;
 		this._ctorClassDef = null;
 		this._ctorType = null;
+		this._callingFuncDef = null; // should become an interface, see CallExpression
 	},
 
 	getToken: function () {
 		return this._qualifiedName.getToken();
-	},
-
-	serialize: function () {
-		return [
-			"ConstructorInvocationStatement",
-			this._qualifiedName.serialize(),
-			Util.serializeArray(this._args)
-		];
 	},
 
 	getQualifiedName: function () {
@@ -86,6 +81,22 @@ var ConstructorInvocationStatement = exports.ConstructorInvocationStatement = St
 		return this._ctorType;
 	},
 
+	getCallingFuncDef: function () {
+		return this._callingFuncDef;
+	},
+
+	setCallingFuncDef: function (funcDef) {
+		this._callingFuncDef = funcDef;
+	},
+
+	serialize: function () {
+		return [
+			"ConstructorInvocationStatement",
+			this._qualifiedName.serialize(),
+			Util.serializeArray(this._args)
+		];
+	},
+
 	doAnalyze: function (context) {
 		if (this._qualifiedName.getImport() == null && this._qualifiedName.getToken().getValue() == "super") {
 			this._ctorClassDef = context.funcDef.getClassDef().extendClassDef();
@@ -101,7 +112,7 @@ var ConstructorInvocationStatement = exports.ConstructorInvocationStatement = St
 			// error is reported by callee
 			return true;
 		}
-		var ctorType = this._ctorClassDef.getMemberTypeByName("constructor", ClassDefinition.GET_MEMBER_MODE_CLASS_ONLY);
+		var ctorType = this._ctorClassDef.getMemberTypeByName("constructor", false, ClassDefinition.GET_MEMBER_MODE_CLASS_ONLY);
 		if (ctorType == null) {
 			if (this._args.length != 0) {
 				context.errors.push(new CompileError(this._qualifiedName.getToken(), "no function with matching arguments"));
@@ -113,6 +124,10 @@ var ConstructorInvocationStatement = exports.ConstructorInvocationStatement = St
 		}
 		this._ctorType = ctorType;
 		return true;
+	},
+
+	forEachCodeElement: function (cb) {
+		return Util.forEachCodeElement(cb, this._args);
 	}
 
 });
@@ -138,6 +153,10 @@ var UnaryExpressionStatement = exports.UnaryExpressionStatement = Statement.exte
 	doAnalyze: function (context) {
 		this._analyzeExpr(context, this._expr);
 		return true;
+	},
+
+	forEachCodeElement: function (cb) {
+		return cb(this._expr);
 	}
 
 });
@@ -204,6 +223,12 @@ var ReturnStatement = exports.ReturnStatement = Statement.extend({
 			}
 		}
 		context.getTopBlock().localVariableStatuses = null;
+		return true;
+	},
+
+	forEachCodeElement: function (cb) {
+		if (this._expr != null && ! cb(this._expr))
+			return false;
 		return true;
 	}
 
@@ -284,8 +309,7 @@ var JumpStatement = exports.JumpStatement = Statement.extend({
 	},
 
 	_determineDestination: function (context) {
-		// find the destination by iterate to the one before the last, which is function scope
-		for (var i = context.blockStack.length - 1; i > 0; --i) {
+		for (var i = context.blockStack.length - 1; ! (context.blockStack[i].statement instanceof MemberFunctionDefinition); --i) {
 			var statement = context.blockStack[i].statement;
 			// continue unless we are at the destination level
 			if (! (statement instanceof LabellableStatement))
@@ -312,6 +336,10 @@ var JumpStatement = exports.JumpStatement = Statement.extend({
 		else
 			context.errors.push(new CompileError(this._token, "cannot '" + this._token.getValue() + "' at this point"));
 		return null;
+	},
+
+	forEachCodeElement: function (cb) {
+		return true;
 	}
 
 });
@@ -324,6 +352,10 @@ var BreakStatement = exports.BreakStatement = JumpStatement.extend({
 
 	_getName: function () {
 		return "BreakStatement";
+	},
+
+	forEachCodeElement: function (cb) {
+		return true;
 	}
 
 });
@@ -336,6 +368,10 @@ var ContinueStatement = exports.ContinueStatement = JumpStatement.extend({
 
 	_getName: function () {
 		return "ContinueStatement";
+	},
+
+	forEachCodeElement: function (cb) {
+		return true;
 	}
 
 });
@@ -361,6 +397,10 @@ var LabellableStatement = exports.LabellableStatement = Statement.extend({
 		return [
 			Util.serializeNullable(this._label)
 		];
+	},
+
+	forEachCodeElement: function (cb) {
+		return true;
 	},
 
 	_prepareBlockAnalysis: function (context) {
@@ -476,6 +516,14 @@ var DoWhileStatement = exports.DoWhileStatement = ContinuableStatement.extend({
 			throw e;
 		}
 		return true;
+	},
+
+	forEachCodeElement: function (cb) {
+		if (! cb(this._expr))
+			return false;
+		if (! Util.forEachCodeElement(cb, this._statements))
+			return false;
+		return true;
 	}
 
 });
@@ -539,6 +587,16 @@ var ForInStatement = exports.ForInStatement = ContinuableStatement.extend({
 			this._abortBlockAnalysis(context);
 			throw e;
 		}
+		return true;
+	},
+
+	forEachCodeElement: function (cb) {
+		if (! cb(this._lhsExpr))
+			return false;
+		if (! cb(this._listExpr))
+			return false;
+		if (! Util.forEachCodeElement(cb, this._statements))
+			return false;
 		return true;
 	}
 
@@ -605,6 +663,18 @@ var ForStatement = exports.ForStatement = ContinuableStatement.extend({
 			this._abortBlockAnalysis(context);
 			throw e;
 		}
+		return true;
+	},
+
+	forEachCodeElement: function (cb) {
+		if (this._initExpr != null && ! cb(this._initExpr))
+			return false;
+		if (this._condExpr != null && ! cb(this._condExpr))
+			return false;
+		if (this._postExpr != null && ! cb(this._postExpr))
+			return false;
+		if (! Util.forEachCodeElement(cb, this._statements))
+			return false;
 		return true;
 	}
 
@@ -677,6 +747,14 @@ var IfStatement = exports.IfStatement = Statement.extend({
 		else
 			context.getTopBlock().localVariableStatuses = lvStatusesOnFalseStmts;
 		return true;
+	},
+
+	forEachCodeElement: function (cb) {
+		if (! Util.forEachCodeElement(cb, this._onTrueStatements))
+			return false;
+		if (! Util.forEachCodeElement(cb, this._onFalseStatements))
+			return false;
+		return true;
 	}
 
 });
@@ -709,9 +787,7 @@ var SwitchStatement = exports.SwitchStatement = LabellableStatement.extend({
 	doAnalyze: function (context) {
 		if (! this._analyzeExpr(context, this._expr))
 			return true;
-		var exprType = this._expr.getType();
-		if (exprType == null)
-			return true;
+		var exprType = this._expr.getType().resolveIfMayBeUndefined();
 		if (! (exprType.equals(Type.booleanType) || exprType.equals(Type.integerType) || exprType.equals(Type.numberType) || exprType.equals(Type.stringType))) {
 			context.errors.push(new CompileError(this._token, "switch statement only accepts boolean, number, or string expressions"));
 			return true;
@@ -733,6 +809,14 @@ var SwitchStatement = exports.SwitchStatement = LabellableStatement.extend({
 			this._abortBlockAnalysis(context);
 			throw e;
 		}
+		return true;
+	},
+
+	forEachCodeElement: function (cb) {
+		if (! cb(this._expr))
+			return false;
+		if (! Util.forEachCodeElement(cb, this._statements))
+			return false;
 		return true;
 	},
 
@@ -773,9 +857,11 @@ var CaseStatement = exports.CaseStatement = Statement.extend({
 		var expectedType = statement.getExpr().getType();
 		if (expectedType == null)
 			return true;
+		expectedType = expectedType.resolveIfMayBeUndefined();
 		var exprType = this._expr.getType();
 		if (exprType == null)
 			return true;
+		exprType = exprType.resolveIfMayBeUndefined();
 		if (exprType.equals(expectedType)) {
 			// ok
 		} else if (Type.isIntegerOrNumber(exprType) && Type.isIntegerOrNumber(expectedType)) {
@@ -788,6 +874,10 @@ var CaseStatement = exports.CaseStatement = Statement.extend({
 		// reset local variable statuses
 		SwitchStatement.resetLocalVariableStatuses(context);
 		return true;
+	},
+
+	forEachCodeElement: function (cb) {
+		return cb(this._expr);
 	}
 
 });
@@ -810,6 +900,10 @@ var DefaultStatement = exports.DefaultStatement = Statement.extend({
 
 	doAnalyze: function (context) {
 		SwitchStatement.resetLocalVariableStatuses(context);
+		return true;
+	},
+
+	forEachCodeElement: function (cb) {
 		return true;
 	}
 
@@ -856,22 +950,41 @@ var WhileStatement = exports.WhileStatement = ContinuableStatement.extend({
 			throw e;
 		}
 		return true;
+	},
+
+	forEachCodeElement: function (cb) {
+		if (! cb(this._expr))
+			return false;
+		if (! Util.forEachCodeElement(cb, this._statements))
+			return false;
+		return true;
 	}
 
 });
 
 var TryStatement = exports.TryStatement = Statement.extend({
 
-	constructor: function (token, tryStatements, catchIdentifier, catchStatements, finallyStatements) {
+	constructor: function (token, tryStatements, catchStatements, finallyStatements) {
 		this._token = token;
 		this._tryStatements = tryStatements;
-		this._catchIdentifier = catchIdentifier; // FIXME type?
 		this._catchStatements = catchStatements;
 		this._finallyStatements = finallyStatements;
 	},
 
 	getToken: function () {
 		return this._token;
+	},
+
+	getTryStatements: function () {
+		return this._tryStatements;
+	},
+
+	getCatchStatements: function () {
+		return this._catchStatements;
+	},
+
+	getFinallyStatements: function () {
+		return this._finallyStatements;
 	},
 
 	serialize: function () {
@@ -885,35 +998,146 @@ var TryStatement = exports.TryStatement = Statement.extend({
 	},
 
 	doAnalyze: function (context) {
+		// try
+		context.blockStack.push(new BlockContext(context.getTopBlock().localVariableStatuses.clone(), this));
 		try {
-			context.blockStack.push(new BlockContext(context.getTopBlock().localVariableStatuses.clone(), this));
 			for (var i = 0; i < this._tryStatements.length; ++i)
 				if (! this._tryStatements[i].analyze(context))
 					return false;
+			// change the statuses to may (since they might be left uninitialized due to an exception)
+			var lvStatusesAfterTry = context.getTopBlock().localVariableStatuses;
 		} finally {
 			context.blockStack.pop();
 		}
-		if (this._catchStatements != null) {
-			try {
-				context.blockStack.push(new BlockContext(context.getTopBlock().localVariableStatuses.clone(), this));
-				for (var i = 0; i < this._catchStatements.length; ++i)
-					if (! this._catchStatements[i].analyze(context))
-						return false;
-			} finally {
-				context.blockStack.pop();
-			}
+		context.getTopBlock().localVariableStatuses = context.getTopBlock().localVariableStatuses.merge(lvStatusesAfterTry);
+		// catch
+		for (var i = 0; i < this._catchStatements.length; ++i) {
+			if (! this._catchStatements[i].analyze(context))
+				return false;
 		}
-		if (this._finallyStatements != null) {
-			try {
-				context.blockStack.push(new BlockContext(context.getTopBlock().localVariableStatuses.clone(), this));
-				for (var i = 0; i < this._finallyStatements.length; ++i)
-					if (! this._finallyStatements[i].analyze(context))
-						return false;
-			} finally {
-				context.blockStack.pop();
+		// finally
+		for (var i = 0; i < this._finallyStatements.length; ++i)
+			if (! this._finallyStatements[i].analyze(context))
+				return false;
+		return true;
+	},
+
+	forEachCodeElement: function (cb) {
+		if (! Util.forEachCodeElement(cb, this._statements))
+			return false;
+		if (! Util.forEachCodeElement(cb, this._catchStatements))
+			return false;
+		if (! Util.forEachCodeElement(cb, this._finallyStatements))
+			return false;
+		return true;
+	}
+
+});
+
+var CatchStatement = exports.CatchStatement = Statement.extend({
+
+	constructor: function (token, local, statements) {
+		this._token = token;
+		this._local = local;
+		this._statements = statements;
+	},
+
+	getToken: function () {
+		return this._token;
+	},
+
+	getLocal: function () {
+		return this._local;
+	},
+
+	getStatements: function () {
+		return this._statements;
+	},
+
+	serialize: function () {
+		return [
+			"CatchStatement",
+			this._token.serialize(),
+			this._local.serialize(),
+			Util.serializeArray(this._statements)
+		];
+	},
+
+	doAnalyze: function (context) {
+		// check the catch type
+		var catchType = this.getLocal().getType();
+		if (catchType instanceof ObjectType || catchType.equals(Type.variantType)) {
+			for (var j = 0; j < i; ++j) {
+				var prevCatchType = this._catchStatements[j].getLocal().getType();
+				if (catchType.isConvertibleTo(prevCatchType)) {
+					context.errors.push(new CompileError(
+						this._token,
+						"code is unreachable, a broader catch statement for type '" + prevCatchType.toString() + "' already exists"));
+					break;
+				}
 			}
+		} else {
+			context.errors.push(new CompileError(this._token, "only objects or a variant may be caught"));
+		}
+		// analyze the statements
+		context.blockStack.push(new BlockContext(context.getTopBlock().localVariableStatuses.clone(), this));
+		try {
+			for (var i = 0; i < this._statements.length; ++i) {
+				if (! this._statements[i].analyze(context))
+					return false;
+			}
+			var lvStatusesAfterCatch = context.getTopBlock().localVariableStatuses;
+		} finally {
+			context.blockStack.pop();
+		}
+		context.getTopBlock().localVariableStatuses = context.getTopBlock().localVariableStatuses.merge(lvStatusesAfterCatch);
+		return true;
+	},
+
+	forEachCodeElement: function (cb) {
+		return Util.forEachCodeElement(cb, this._statements);
+	}
+
+});
+
+var ThrowStatement = exports.ThrowStatement = Statement.extend({
+
+	constructor: function (token, expr) {
+		this._token = token;
+		this._expr = expr;
+	},
+
+	getToken: function () {
+		return this._token;
+	},
+
+	getExpr: function () {
+		return this._expr;
+	},
+
+	serialize: function () {
+		return [
+			"ThrowStatement",
+			this._token.serialize(),
+			this._expr.serialize()
+		];
+	},
+
+	doAnalyze: function (context) {
+		if (! this._analyzeExpr(context, this._expr))
+			return true;
+		var errorClassDef = context.parser.lookup(context.errors, this._token, "Error");
+		if (errorClassDef == null)
+			throw new Error("could not find definition for Error");
+		if (this._expr.getType().equals(Type.voidType)) {
+			context.errors.push(new CompileError(this._token, "cannot throw 'void'"));
+			return true;
 		}
 		return true;
+	},
+
+	forEachCodeElement: function (cb) {
+		return cb(this._expr);
 	}
 
 });
@@ -953,11 +1177,15 @@ var AssertStatement = exports.AssertStatement = InformationStatement.extend({
 
 	doAnalyze: function (context) {
 		if (! this._analyzeExpr(context, this._expr))
-			return false;
+			return true;
 		var exprType = this._expr.getType();
 		if (! exprType.equals(Type.booleanType))
 			context.errors.push(new CompileError(this._exprs[0].getToken(), "cannot assert type " + exprType.serialize()));
 		return true;
+	},
+
+	forEachCodeElement: function (cb) {
+		return cb(this._expr);
 	}
 
 });
@@ -984,7 +1212,7 @@ var LogStatement = exports.LogStatement = InformationStatement.extend({
 	doAnalyze: function (context) {
 		for (var i = 0; i < this._exprs.length; ++i) {
 			if (! this._analyzeExpr(context, this._exprs[i]))
-				return false;
+				return true;
 			var exprType = this._exprs[i].getType();
 			if (exprType == null)
 				return true;
@@ -993,6 +1221,33 @@ var LogStatement = exports.LogStatement = InformationStatement.extend({
 				break;
 			}
 		}
+		return true;
+	},
+
+	forEachCodeElement: function (cb) {
+		return Util.forEachCodeElement(cb, this._exprs);
+	}
+
+});
+
+var DebuggerStatement = exports.DebuggerStatement = InformationStatement.extend({
+
+	constructor: function (token) {
+		InformationStatement.prototype.constructor.call(this, token);
+	},
+
+	serialize: function () {
+		return [
+			"DebuggerStatement",
+			this._token.serialize()
+		];
+	},
+
+	doAnalyze: function (context) {
+		return true;
+	},
+
+	forEachCodeElement: function (cb) {
 		return true;
 	}
 

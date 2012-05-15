@@ -84,6 +84,7 @@ var Compiler = exports.Compiler = Class.extend({
 		BooleanType._classDef = builtins.lookup(errors, null, "Boolean");
 		NumberType._classDef = builtins.lookup(errors, null, "Number");
 		StringType._classDef = builtins.lookup(errors, null, "String");
+		FunctionType._classDef = builtins.lookup(errors, null, "Function");
 		if (errors.length != 0) {
 			this._printErrors(errors);
 			return false;
@@ -105,7 +106,12 @@ var Compiler = exports.Compiler = Class.extend({
 			this._printErrors(errors);
 			return false;
 		}
-		// TODO optimize
+		// determine callees (for optimization and code generation)
+		this._determineCallees();
+		// optimization
+		if (this._enableInlining)
+			this._inlineFunctions();
+		// TODO peep-hole and dead store optimizations, etc.
 		this._generateCode();
 		return true;
 	},
@@ -140,14 +146,16 @@ var Compiler = exports.Compiler = Class.extend({
 		if (errors.length != 0)
 			return false;
 		// register imported files
-		var imports = parser.getImports();
-		for (var i = 0; i < imports.length; ++i) {
-			var path = this._resolvePath(imports[i].getFilenameToken());
-			if (path == parser.getPath()) {
-				errors.push(new CompileError(imports[i].getFilenameToken(), "cannot import itself"));
-				return false;
+		if (this._mode != Compiler.MODE_PARSE) {
+			var imports = parser.getImports();
+			for (var i = 0; i < imports.length; ++i) {
+				var path = this._resolvePath(imports[i].getFilenameToken());
+				if (path == parser.getPath()) {
+					errors.push(new CompileError(imports[i].getFilenameToken(), "cannot import itself"));
+					return false;
+				}
+				this.addSourceFile(imports[i].getFilenameToken(), this._resolvePath(imports[i].getFilenameToken()));
 			}
-			this.addSourceFile(imports[i].getFilenameToken(), this._resolvePath(imports[i].getFilenameToken()));
 		}
 		return true;
 	},
@@ -158,9 +166,10 @@ var Compiler = exports.Compiler = Class.extend({
 			var classDefs = parser.getClassDefs();
 			for (var j = 0; j < classDefs.length; ++j) {
 				if (! f(parser, classDefs[j]))
-					return;
+					return false;
 			}
 		}
+		return true;
 	},
 
 	_resolveImports: function (errors) {
@@ -259,6 +268,13 @@ var Compiler = exports.Compiler = Class.extend({
 		// analyze unused variables in every classdef
 		this.forEachClassDef(function (parser, classDef) {
 			classDef.analyzeUnusedVariables();
+			return true;
+		}.bind(this));
+	},
+
+	_determineCallees: function () {
+		this.forEachClassDef(function (parser, classDef) {
+			classDef.determineCallees();
 			return true;
 		}.bind(this));
 	},

@@ -2,7 +2,7 @@
 
 window.addEventListener('load', function(e) {
 	"use strict";
-	
+
 	function element(id) {
 		return document.getElementById(id);
 	}
@@ -16,31 +16,6 @@ window.addEventListener('load', function(e) {
 		}
 		return 0;
 	}
-
-	function applyClosureCompiler(sourceText, level) {
-		var URL = 'http://closure-compiler.appspot.com/compile';
-		var xhr = new XMLHttpRequest();
-		xhr.open("POST", URL, false);
-		xhr.setRequestHeader("Content-Type",
-							 "application/x-www-form-urlencoded");
-
-		var param = {
-			js_code: sourceText,
-			formatting: "pretty_print",
-			compilation_level: level,
-			output_format: "text",
-			output_info: "compiled_code"
-		};
-		var params = [];
-		for(var key in param) {
-			params.push(encodeURIComponent(key) +
-						"=" +
-						encodeURIComponent(param[key]));
-		}
-		xhr.send(params.join("&"));
-		return xhr.responseText;
-	}
-
 
 	var list   = element('source-list');
 
@@ -123,7 +98,7 @@ window.addEventListener('load', function(e) {
 
 			var level = getOptimizationLevel();
 			if(level > 0 && options.mode !== 'parse') {
-				out = applyClosureCompiler(out, level === 1
+				out = platform.applyClosureCompiler(out, level === 1
 										 ? "SIMPLE_OPTIMIZATIONS"
 										 : "ADVANCED_OPTIMIZATIONS");
 			}
@@ -158,7 +133,9 @@ window.addEventListener('load', function(e) {
 
 			var url = a.href;
 			var xhr = new XMLHttpRequest();
-			xhr.addEventListener("load", function(e) {
+			xhr.onreadystatechange = function(e) {
+				if (xhr.readyState !== 4) return;
+
 				input.value = xhr.responseText.replace(/\t/g, "  ");
 
 				forEach(list.children, function(li) {
@@ -166,10 +143,8 @@ window.addEventListener('load', function(e) {
 				});
 				li.className = "active";
 
-				setTimeout(function() {
-					compile({ mode: "run" });
-				}, 0);
-			});
+				compile({ mode: "run" });
+			};
 			xhr.open("GET", url);
 			xhr.send(null);
 		});

@@ -15,6 +15,7 @@ See also:
 */
 
 import "js.jsx";
+import "css.jsx";
 
 // DOM-Core
 
@@ -40,7 +41,7 @@ native class DOMImplementation {
 
 }
 
-native class Node {
+native class Node extends EventTarget {
 	static const ELEMENT_NODE : int;
 	static const ATTRIBUTE_NODE : int;
 	static const TEXT_NODE : int;
@@ -270,6 +271,10 @@ native class HTMLCollection {
 	function namedItem(name : string) : Node;
 }
 
+native class HTMLOptionsCollection {
+	// TODO
+}
+
 native class HTMLDocument extends Document {
 	var title : string;
 
@@ -310,10 +315,6 @@ native class DOMStringList {
 }
 
 native class DOMStringMap {
-	// TODO
-}
-
-native class CSSStyleDeclaration {
 	// TODO
 }
 
@@ -383,41 +384,462 @@ native class HTMLElement extends Element {
 	function getClientRects() : ClientRectList;
 }
 
+
+// http://www.w3.org/TR/DOM-Level-2-HTML/idl-definitions.html
+
 native class HTMLHtmlElement extends HTMLElement {
-	var version :string;
+	var version : string;
 }
 
 native class HTMLHeadElement extends HTMLElement {
-	var profile :string;
+	var profile : string;
 }
 
 native class HTMLLinkElement extends HTMLElement {
-	// TODO
+	var disabled : boolean;
+	var charset : string;
+	var href : string;
+	var hreflang : string;
+	var media : string;
+	var rel : string;
+	var rev : string;
+	var target : string;
+	var type : string;
 }
 
 native class HTMLTitleElement extends HTMLElement {
-	// TODO
+	var text : string;
 }
 
 native class HTMLMetaElement extends HTMLElement {
-	// TODO
+	var content : string;
+	var httpEquiv : string;
+	var name : string;
+	var scheme : string;
 }
 
 native class HTMLBaseElement extends HTMLElement {
-	// TODO
+	var href : string;
+	var target : string;
+}
+
+native class HTMLIsIndexElement extends HTMLElement {
+	const form : HTMLFormElement;
+	var prompt : string;
+}
+
+native class HTMLStyleElement extends HTMLElement {
+	var disabled : boolean;
+	var media : string;
+	var type : string;
+}
+
+native class HTMLBodyElement extends HTMLElement {
+	var aLink : string;
+	var background : string;
+	var bgColor : string;
+	var link : string;
+	var text : string;
+	var vLink : string;
+}
+
+native class HTMLFormElement extends HTMLElement {
+	const elements : HTMLCollection;
+	const length : int;
+	var name : string;
+	var acceptCharset : string;
+	var action : string;
+	var enctype : string;
+	var method : string;
+	var target : string;
+	function submit() : void;
+	function reset() : void;
+}
+
+native class HTMLSelectElement extends HTMLElement {
+	const type : string;
+	var selectedIndex : int;
+	var value : string;
+	var length : int;
+	const form : HTMLFormElement;
+	const options : HTMLOptionsCollection;
+	var disabled : boolean;
+	var multiple : boolean;
+	var name : string;
+	var size : int;
+	function add(element : HTMLElement, before : HTMLElement) : void;
+	function remove(index : int) : void;
+}
+
+native class HTMLOptGroupElement extends HTMLElement {
+	var disabled : boolean;
+	var label : string;
+}
+
+native class HTMLOptionElement extends HTMLElement {
+	const form : HTMLFormElement;
+	var defaultSelected : boolean;
+	const text : string;
+	const index : int;
+	var disabled : boolean;
+	var label : string;
+	var selected : boolean;
+	var value : string;
+}
+
+native class HTMLInputElement extends HTMLElement {
+	var defaultValue : string;
+	var defaultChecked : boolean;
+	const form : HTMLFormElement;
+	var accept : string;
+	var accessKey : string;
+	var align : string;
+	var alt : string;
+	var checked : boolean;
+	var disabled : boolean;
+	var maxLength : int;
+	var name : string;
+	var readOnly : boolean;
+	var size : int;
+	var src : string;
+	var type : string;
+	var useMap : string;
+	var value : string;
+	function select() : void;
+}
+
+native class HTMLTextAreaElement extends HTMLElement {
+	var defaultValue : string;
+	const form : HTMLFormElement;
+	var accessKey : string;
+	var cols : int;
+	var disabled : boolean;
+	var name : string;
+	var readOnly : boolean;
+	var rows : int;
+	const type : string;
+	var value : string;
+	function select() : void;
+}
+
+native class HTMLButtonElement extends HTMLElement {
+	const form : HTMLFormElement;
+	var accessKey : string;
+	var disabled : boolean;
+	var name : string;
+	const type : string;
+	var value : string;
+}
+
+native class HTMLLabelElement extends HTMLElement {
+	const form : HTMLFormElement;
+	var accessKey : string;
+	var htmlFor : string;
+}
+
+native class HTMLFieldSetElement extends HTMLElement {
+	const form : HTMLFormElement;
+}
+
+native class HTMLLegendElement extends HTMLElement {
+	const form : HTMLFormElement;
+	var accessKey : string;
+	var align : string;
+}
+
+native class HTMLUListElement extends HTMLElement {
+	var compact : boolean;
+	var type : string;
+}
+
+native class HTMLOListElement extends HTMLElement {
+	var compact : boolean;
+	var start : int;
+	var type : string;
+}
+
+native class HTMLDListElement extends HTMLElement {
+	var compact : boolean;
+}
+
+native class HTMLDirectoryElement extends HTMLElement {
+	var compact : boolean;
+}
+
+native class HTMLMenuElement extends HTMLElement {
+	var compact : boolean;
+}
+
+native class HTMLLIElement extends HTMLElement {
+	var type : string;
+	var value : int;
+}
+
+native class HTMLDivElement extends HTMLElement {
+	var align : string;
+}
+
+native class HTMLParagraphElement extends HTMLElement {
+	var align : string;
+}
+
+native class HTMLHeadingElement extends HTMLElement {
+	var align : string;
+}
+
+native class HTMLQuoteElement extends HTMLElement {
+	var cite : string;
+}
+
+native class HTMLPreElement extends HTMLElement {
+	var width : int;
+}
+
+native class HTMLBRElement extends HTMLElement {
+	var clear : string;
+}
+
+native class HTMLBaseFontElement extends HTMLElement {
+	var color : string;
+	var face : string;
+	var size : int;
+}
+
+native class HTMLFontElement extends HTMLElement {
+	var color : string;
+	var face : string;
+	var size : string;
+}
+
+native class HTMLHRElement extends HTMLElement {
+	var align : string;
+	var noShade : boolean;
+	var size : string;
+	var width : string;
+}
+
+native class HTMLModElement extends HTMLElement {
+	var cite : string;
+	var dateTime : string;
+}
+
+native class HTMLAnchorElement extends HTMLElement {
+	var accessKey : string;
+	var charset : string;
+	var coords : string;
+	var href : string;
+	var hreflang : string;
+	var name : string;
+	var rel : string;
+	var rev : string;
+	var shape : string;
+	var target : string;
+	var type : string;
 }
 
 native class HTMLImageElement extends HTMLElement {
-	// TODO
+	var name : string;
+	var align : string;
+	var alt : string;
+	var border : string;
+	var height : int;
+	var hspace : int;
+	var isMap : boolean;
+	var longDesc : string;
+	var src : string;
+	var useMap : string;
+	var vspace : int;
+	var width : int;
+
+	// HTML5
+	var crossOrigin : MayBeUndefined.<string>;
+	const naturalWidth: MayBeUndefined.<int>;
+	const naturalHeight: MayBeUndefined.<int>;
+	const complete :MayBeUndefined.<int>;
 }
+
+native class HTMLObjectElement extends HTMLElement {
+	const form : HTMLFormElement;
+	var code : string;
+	var align : string;
+	var archive : string;
+	var border : string;
+	var codeBase : string;
+	var codeType : string;
+	var data : string;
+	var declare : boolean;
+	var height : string;
+	var hspace : int;
+	var name : string;
+	var standby : string;
+	var type : string;
+	var useMap : string;
+	var vspace : int;
+	var width : string;
+	const contentDocument : Document;
+}
+
+native class HTMLParamElement extends HTMLElement {
+	var name : string;
+	var type : string;
+	var value : string;
+	var valueType : string;
+}
+
+native class HTMLAppletElement extends HTMLElement {
+	var align : string;
+	var alt : string;
+	var archive : string;
+	var code : string;
+	var codeBase : string;
+	var height : string;
+	var hspace : int;
+	var name : string;
+	var object : string;
+	var vspace : int;
+	var width : string;
+}
+
+native class HTMLMapElement extends HTMLElement {
+	const areas : HTMLCollection;
+	var name : string;
+}
+
+native class HTMLAreaElement extends HTMLElement {
+	var accessKey : string;
+	var alt : string;
+	var coords : string;
+	var href : string;
+	var noHref : boolean;
+	var shape : string;
+	var target : string;
+}
+
+native class HTMLScriptElement extends HTMLElement {
+	var text : string;
+	var htmlFor : string;
+	var event : string;
+	var charset : string;
+	var defer : boolean;
+	var src : string;
+	var type : string;
+}
+
+native class HTMLTableElement extends HTMLElement {
+	var caption : HTMLTableCaptionElement;
+	var tHead : HTMLTableSectionElement;
+	var tFoot : HTMLTableSectionElement;
+	const rows : HTMLCollection;
+	const tBodies : HTMLCollection;
+	var align : string;
+	var bgColor : string;
+	var border : string;
+	var cellPadding : string;
+	var cellSpacing : string;
+	var frame : string;
+	var rules : string;
+	var summary : string;
+	var width : string;
+	function createTHead() : HTMLElement;
+	function deleteTHead() : void;
+	function createTFoot() : HTMLElement;
+	function deleteTFoot() : void;
+	function createCaption() : HTMLElement;
+	function deleteCaption() : void;
+	function insertRow(index : int) : HTMLElement;
+	function deleteRow(index : int) : void;
+}
+
+native class HTMLTableCaptionElement extends HTMLElement {
+	var align : string;
+}
+
+native class HTMLTableColElement extends HTMLElement {
+	var align : string;
+	var ch : string;
+	var chOff : string;
+	var span : int;
+	var vAlign : string;
+	var width : string;
+}
+
+native class HTMLTableSectionElement extends HTMLElement {
+	var align : string;
+	var ch : string;
+	var chOff : string;
+	var vAlign : string;
+	const rows : HTMLCollection;
+	function insertRow(index : int) : HTMLElement;
+	function deleteRow(index : int) : void;
+}
+
+native class HTMLTableRowElement extends HTMLElement {
+	const rowIndex : int;
+	const sectionRowIndex : int;
+	const cells : HTMLCollection;
+	var align : string;
+	var bgColor : string;
+	var ch : string;
+	var chOff : string;
+	var vAlign : string;
+	function insertCell(index : int) : HTMLElement;
+	function deleteCell(index : int) : void;
+}
+
+native class HTMLTableCellElement extends HTMLElement {
+	const cellIndex : int;
+	var abbr : string;
+	var align : string;
+	var axis : string;
+	var bgColor : string;
+	var ch : string;
+	var chOff : string;
+	var colSpan : int;
+	var headers : string;
+	var height : string;
+	var noWrap : boolean;
+	var rowSpan : int;
+	var scope : string;
+	var vAlign : string;
+	var width : string;
+}
+
+native class HTMLFrameSetElement extends HTMLElement {
+	var cols : string;
+	var rows : string;
+}
+
+native class HTMLFrameElement extends HTMLElement {
+	var frameBorder : string;
+	var longDesc : string;
+	var marginHeight : string;
+	var marginWidth : string;
+	var name : string;
+	var noResize : boolean;
+	var scrolling : string;
+	var src : string;
+	const contentDocument : Document;
+}
+
+native class HTMLIFrameElement extends HTMLElement {
+	var align : string;
+	var frameBorder : string;
+	var height : string;
+	var longDesc : string;
+	var marginHeight : string;
+	var marginWidth : string;
+	var name : string;
+	var scrolling : string;
+	var src : string;
+	var width : string;
+	const contentDocument : Document;
+}
+
 
 native class HTMLVideoElement extends HTMLElement {
 	// TODO
 }
 
-native class HTMLMenuElement extends HTMLElement {
-	// TODO
-}
 
 native class HTMLCanvasElement extends HTMLElement {
 
@@ -431,6 +853,9 @@ native class HTMLCanvasElement extends HTMLElement {
 	function toBlob(callback : function(data :string):void, type : string) :void;
 
 	function getContext(contextId : string) : MayBeUndefined.<CanvasRenderingContext>;
+
+	function addEventListener(type : string, listener : function(:MouseEvent):void) : void;
+	function addEventListener(type : string, listener : function(:TouchEvent):void) : void;
 }
 
 // TODO a lot of HTML element classes!
@@ -438,9 +863,10 @@ native class HTMLCanvasElement extends HTMLElement {
 // DOM-Browser
 
 // http://www.w3.org/TR/Window/
+// https://developer.mozilla.org/en/DOM/window
 
 // The Window Interface
-final native __fake__ class Window {
+final native __fake__ class Window extends EventTarget {
 
 	const window :Window;
 	const self :Window;
@@ -459,12 +885,96 @@ final native __fake__ class Window {
 	function setInterval(listener : function():void, milliseconds :int) :int;
 	function clearInterval(timerID :int) :void;
 
-	// browser-defined properties
-
-	const document :Document;
-	const navigator :variant; // FIXME
+	const applicationCache : DOMApplicationCache;
+	const closed : boolean;
+	const content : HTMLElement;
+	const crypto : Crypto;
+	const document :HTMLDocument;
+	const defaultStatus : string;
+	const history : History;
+	const innerHeight : int;
+	const innerWidth : int;
+	const length : int;
+	const locationbar : BarInfo;
+	const localStorage : Storage;
+	const menubar : boolean;
+	const navigator :Navigator;
+	const opener : Window;
+	const outerHeight : int;
+	const outerWidth : int;
+	const pageXOffset : int;
+	const pageYOffset : int;
+	const performance : Performance;
+	const personalbar : BarInfo;
+	const screen : Screen;
+	const screenX : int;
+	const screenY : int;
+	const scrollbars : BarInfo;
+	const scrollX : int;
+	const sessionStorage : Storage;
+	const status : string;
+	const statusbar : BarInfo;
+	const toolbar : BarInfo;
 
 	function alert(message :string) :void;
+	function atob(base64encoded : string) : string;
+	function blur() : void;
+	function btoa(binary : string) : string;
+	function close() : void;
+	function confirm(message : string) : boolean;
+	function find(str : string) : boolean;
+	function focus() : void;
+	function matchMedia(mediaQueryString : string) : MediaQueryList;
+	function moveBy(deltaX : int, deltaY : int) : void;
+	function moveTo(x : int, y : int) : void;
+	function open(url : string) : Window;
+	function open(url : string, windowName : string) : Window;
+	function open(url : string, windowName : string, windowFutures : string) : Window;
+	function postMessage(message : string, targetOrigin : string) : void;
+	function print() : void;
+	function prompt(text : string, value : string) : string;
+	function resizeBy(deltaX : int, deltaY : int) : void;
+	function resizeTo(x : int, y : int) : void;
+	function scrollBy(deltaX : int, deltaY : int) : void;
+	function showModalDialog(uri : string, args : variant, options : variant) : variant; // FIXME
+	function stop() : void;
+
+}
+
+native __fake__ class DOMApplicationCache {
+	// TODO
+}
+
+native __fake__ class Crypto {
+	// TODO
+}
+
+native __fake__ class BarInfo {
+	const visible : boolean;
+}
+
+native class Storage {
+	// TODO
+}
+
+native __fake__ class History {
+	// TODO
+}
+
+native __fake__ class Navigator {
+	// TODO
+}
+
+native __fake__ class Performance {
+	// TODO
+}
+
+native __fake__ class Screen {
+	// TODO
+}
+
+native __fake__ class MediaQueryList {
+	// TODO
 }
 
 // The Location Interface
@@ -639,11 +1149,11 @@ native class TouchEvent extends UIEvent {
 // http://www.w3.org/TR/XMLHttpRequest/
 
 native class XMLHttpRequestEventTarget extends EventTarget {
-	// TODO
+	function addEventListener(target : string, listener : function(:ProgressEvent):void) : void;
+	function removeEventListener(target : string, listener : function(:ProgressEvent):void) : void;
 }
 
 native class XMLHttpRequestUpload extends XMLHttpRequestEventTarget {
-	// TODO
 }
 
 native class XMLHttpRequest extends XMLHttpRequestEventTarget {
@@ -668,6 +1178,12 @@ native class XMLHttpRequest extends XMLHttpRequestEventTarget {
 
 	function send() : void;
 	function send(data : string) : void;
+	function send(data : String) : void;
+	// FIXME function send(data : ArrayBuffer) : void;
+	// FIXME function send(data : Blob) : void;
+	function send(data : Document) : void;
+	// FIXME function send(data : FormData) : void;
+
 	function abort() : void;
 
 	// response
@@ -682,6 +1198,16 @@ native class XMLHttpRequest extends XMLHttpRequestEventTarget {
 	const responseText : string;
 	const responseXML : Document;
 }
+
+// http://dvcs.w3.org/hg/progress/raw-file/tip/Overview.html#progressevent
+
+native class ProgressEvent extends Event {
+	const lengthComputable : boolean;
+	const loaded : number;
+	const total : number;
+}
+
+// Canvas
 
 interface CanvasRenderingContext { }
 

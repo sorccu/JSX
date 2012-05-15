@@ -7,13 +7,22 @@ native class Object {
 // 15.2
 native final class Map.<T> {
 
+	function __native_index_operator__(key : string) : MayBeUndefined.<T>;
+
 	// 15.2.4
 	function hasOwnProperty(key : string) : boolean;
 
 }
 
+// 15.3
+native final class Function {
+	// JSX does not support call() or apply(), since it is a statically-typed language
+}
+
 // 15.4
 native final class Array.<T> {
+
+	function __native_index_operator__(n : number) : MayBeUndefined.<T>;
 
 	// 15.4.4
 	override function toString() : string;
@@ -29,6 +38,7 @@ native final class Array.<T> {
 	function slice(start : int, end : int) : Array.<T>;
 	function sort() : Array.<T>;
 	function sort(comparefn : function (x : MayBeUndefined.<T>, y : MayBeUndefined.<T>) : int) : Array.<T>;
+	function sort(comparefn : function (x : MayBeUndefined.<T>, y : MayBeUndefined.<T>) : number) : Array.<T>;
 	function splice(start : int, deleteCount : int) : Array.<T>; // FIXME more arguments
 	function unshift(item : T) : int; // FIXME more arguments
 
@@ -95,6 +105,7 @@ native final class Boolean {
 	// 15.6.2
 	function constructor();
 	function constructor(value : boolean);
+	function constructor(value : Boolean);
 
 	// 15.6.4
 	override function toString() : string;
@@ -108,6 +119,7 @@ native final class Number {
 	// 15.7.2
 	function constructor();
 	function constructor(value : number);
+	function constructor(value : Number);
 
 	// 15.7.3
 	static var MAX_VALUE : number;
@@ -273,6 +285,7 @@ native final class RegExp {
 
 	function constructor(pattern :string, flags :string);
 	function constructor(pattern :string);
+	function constructor(pattern :RegExp);
 
 	// FIXME: the matched object is a variation of string[],
 	//        but has "index", "input" and "lastIndex" properties
@@ -288,6 +301,32 @@ native final class RegExp {
 	const multiline :boolean;
 	const lastIndex :int;
 
+}
+
+// 15.11 Error
+native class Error {
+
+	function constructor();
+	function constructor(message : string);
+
+	var name : string;
+	var message : string;
+
+}
+
+native class EvalError extends Error {
+}
+
+native class RangeError extends Error {
+}
+
+native class ReferenceError extends Error {
+}
+
+native class SyntaxError extends Error {
+}
+
+native class TypeError extends Error {
 }
 
 // 5.12

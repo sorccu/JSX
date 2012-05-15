@@ -184,6 +184,15 @@ var Import = exports.Import = Class.extend({
 		return names;
 	},
 
+	serialize: function () {
+		return [
+			"Import",
+			Util.serializeNullable(this._filenameToken),
+			Util.serializeNullable(this._aliasToken),
+			Util.serializeArray(this._classNames)
+		];
+	},
+
 	checkNameConflict: function (errors, nameToken) {
 		if (this._aliasToken != null) {
 			if (this._aliasToken.getValue() == nameToken.getValue()) {
@@ -259,6 +268,14 @@ var QualifiedName = exports.QualifiedName = Class.extend({
 
 	getImport: function () {
 		return this._import;
+	},
+
+	serialize: function () {
+		return [
+			"QualifiedName",
+			this._token.serialize(),
+			Util.serializeNullable(this._import)
+		];
 	},
 
 	equals: function (x) {
@@ -524,11 +541,11 @@ var Parser = exports.Parser = Class.extend({
 		return null;
 	},
 
-	_expect: function (expected) {
+	_expect: function (expected, excludePattern) {
 		if (! (expected instanceof Array))
 			expected = [ expected ];
 
-		var token = this._expectOpt(expected);
+		var token = this._expectOpt(expected, excludePattern);
 		if (token == null) {
 			this._newError("expected keyword: " + expected.join(" "));
 			return null;
@@ -901,7 +918,6 @@ var Parser = exports.Parser = Class.extend({
 		if ((classFlags & ClassDefinition.IS_INTERFACE) != 0)
 			flags |= ClassDefinition.IS_ABSTRACT;
 		if (token.getValue() == "function") {
-			flags |= classFlags & ClassDefinition.IS_NATIVE;
 			return this._functionDefinition(token, flags, classFlags);
 		}
 		// member variable decl.
@@ -948,7 +964,9 @@ var Parser = exports.Parser = Class.extend({
 				this._newError("constructor cannot be declared as 'abstract' or 'final'");
 				return null;
 			}
+			flags |= ClassDefinition.IS_FINAL;
 		}
+		flags |= classFlags & (ClassDefinition.IS_NATIVE | ClassDefinition.IS_FINAL);
 		if (this._expect("(") == null)
 			return null;
 		// arguments
@@ -1166,7 +1184,7 @@ var Parser = exports.Parser = Class.extend({
 		}
 		// parse the statement
 		var token = this._expectOpt([
-			"{", "var", ";", "if", "do", "while", "for", "continue", "break", "return", "switch", "throw", "try", "assert", "log", "delete"
+			"{", "var", ";", "if", "do", "while", "for", "continue", "break", "return", "switch", "throw", "try", "assert", "log", "delete", "debugger"
 		]);
 		if (label != null) {
 			if (! (token != null && token.getValue().match(/^(?:do|while|for|switch)$/) != null)) {
@@ -1199,7 +1217,7 @@ var Parser = exports.Parser = Class.extend({
 			case "switch":
 				return this._switchStatement(token, label);
 			case "throw":
-				return this._throwStatement();
+				return this._throwStatement(token);
 			case "try":
 				return this._tryStatement(token);
 			case "assert":
@@ -1208,6 +1226,8 @@ var Parser = exports.Parser = Class.extend({
 				return this._logStatement(token);
 			case "delete":
 				return this._deleteStatement(token);
+			case "debugger":
+				return this._debuggerStatement(token);
 			default:
 				throw new "logic flaw, got " + token.getValue();
 			}
@@ -1448,15 +1468,6 @@ var Parser = exports.Parser = Class.extend({
 					var labelExpr = this._expr();
 					if (labelExpr == null)
 						return false;
-					// FIXME check if expression is a constant known at compile time
-					if (! (labelExpr instanceof NullExpression
-						|| labelExpr instanceof BooleanLiteralExpression
-						|| labelExpr instanceof IntegerLiteralExpression
-						|| labelExpr instanceof NumberLiteralExpression
-						|| labelExpr instanceof StringLiteralExpression)) {
-						this._newError("case label is not a constant");
-						return false;
-					}
 					if (this._expect(":") == null)
 						return false;
 					this._statements.push(new CaseStatement(caseOrDefaultToken, labelExpr));
@@ -1481,40 +1492,52 @@ var Parser = exports.Parser = Class.extend({
 		return true;
 	},
 
-	_throwStatement: function () {
+	_throwStatement: function (token) {
 		var expr = this._expr();
 		if (expr == null)
 			return false;
-		this._statements.push(new ThrowStatement(expr));
+		this._statements.push(new ThrowStatement(token, expr));
 		return true;
 	},
 
-	_tryStatement: function (token) {
+	_tryStatement: function (tryToken) {
 		if (this._expect("{") == null)
 			return false;
 		var startIndex = this._statements.length;
 		if (this._block() == null)
 			return false;
 		var tryStatements = this._statements.splice(startIndex);
-		var catchIdentifier = null;
-		var catchStatements = null;
-		if (this._expectOpt("catch") != null) {
+		var catchStatements = [];
+		var catchOrFinallyToken = this._expect([ "catch", "finally" ]);
+		if (catchOrFinallyToken == null)
+			return false;
+		for (;
+			catchOrFinallyToken != null && catchOrFinallyToken.getValue() == "catch";
+			catchOrFinallyToken = this._expectOpt([ "catch", "finally" ])) {
+			var catchIdentifier;
+			var catchType;
 			if (this._expect("(") == null
 				|| (catchIdentifier = this._expectIdentifier()) == null
+				|| this._expect(":") == null
+				|| (catchType = this._typeDeclaration(false)) == null
 				|| this._expect(")") == null
 				|| this._expect("{") == null)
 				return false;
 			if (this._block() == null)
 				return false;
-			catchStatements = this._statements.splice(startIndex);
+			catchStatements.push(new CatchStatement(catchOrFinallyToken, new CaughtVariable(catchIdentifier, catchType), this._statements.splice(startIndex)));
 		}
-		var finallyStatements = null;
-		if (this._expectOpt("finally") != null) {
+		if (catchOrFinallyToken != null) {
+			// finally
 			if (this._expect("{") == null)
 				return false;
-			finallyStatements = this._statements.splice(startIndex);
+			if (this._block() == null)
+				return false;
+			var finallyStatements = this._statements.splice(startIndex);
+		} else {
+			finallyStatements = [];
 		}
-		this._statements.push(new TryStatement(token, tryStatements, catchIdentifier, catchStatements, finallyStatements));
+		this._statements.push(new TryStatement(tryToken, tryStatements, catchStatements, finallyStatements));
 		return true;
 	},
 
@@ -1553,6 +1576,11 @@ var Parser = exports.Parser = Class.extend({
 		if (this._expect(";") == null)
 			return false;
 		this._statements.push(new DeleteStatement(token, expr));
+		return true;
+	},
+
+	_debuggerStatement: function (token) {
+		this._statements.push(new DebuggerStatement(token));
 		return true;
 	},
 
@@ -1619,11 +1647,12 @@ var Parser = exports.Parser = Class.extend({
 		// lhs
 		var lhsExpr = this._lhsExpr();
 		if (lhsExpr != null) {
-			var op = this._expect([ "=", "*=", "/=", "%=", "+=", "-=", "<<=", ">>=", ">>>=", "&=", "^=", "|=" ]);
+			var op = this._expect([ "=", "*=", "/=", "%=", "+=", "-=", "<<=", ">>=", ">>>=", "&=", "^=", "|=" ], /^==/);
 			if (op != null) {
 				var assignExpr = this._assignExpr(noIn);
-				if (assignExpr != null)
-					return new AssignmentExpression(op, lhsExpr, assignExpr);
+				if (assignExpr == null)
+					return null;
+				return new AssignmentExpression(op, lhsExpr, assignExpr);
 			}
 		}
 		// failed to parse as lhs op assignExpr, try condExpr
@@ -1734,9 +1763,24 @@ var Parser = exports.Parser = Class.extend({
 	},
 
 	_mulExpr: function () {
-		return this._binaryOpExpr([ "*", "/", "%" ], null, this._unaryExpr, false, function (op, e1, e2) {
+		return this._binaryOpExpr([ "*", "/", "%" ], null, this._asExpr, false, function (op, e1, e2) {
 			return new BinaryNumberExpression(op, e1, e2);
 		});
+	},
+
+	_asExpr: function () {
+		var expr = this._unaryExpr();
+		if (expr == null)
+			return null;
+		var token;
+		while ((token = this._expectOpt("as")) != null) {
+			var noConvert = this._expectOpt("__noconvert__");
+			var type = this._typeDeclaration(false);
+			if (type == null)
+				return null;
+			expr = noConvert ? new AsNoConvertExpression(token, expr, type) : new AsExpression(token, expr, type);
+		}
+		return expr;
 	},
 
 	_unaryExpr: function () {
@@ -1767,7 +1811,7 @@ var Parser = exports.Parser = Class.extend({
 
 	_postfixExpr: function () {
 		var expr = this._lhsExpr();
-		var op = this._expectOpt([ "++", "--", "instanceof", "as" ]);
+		var op = this._expectOpt([ "++", "--", "instanceof" ]);
 		if (op == null)
 			return expr;
 		switch (op.getValue()) {
@@ -1776,12 +1820,6 @@ var Parser = exports.Parser = Class.extend({
 			if (type == null)
 				return null;
 			return new InstanceofExpression(op, expr, type);
-		case "as":
-			var noConvert = this._expectOpt("__noconvert__");
-			var type = this._typeDeclaration(false);
-			if (type == null)
-				return null;
-			return noConvert ? new AsNoConvertExpression(op, expr, type) : new AsExpression(op, expr, type);
 		default:
 			return new PostIncrementExpression(op, expr);
 		}
@@ -2035,7 +2073,7 @@ var Parser = exports.Parser = Class.extend({
 	},
 
 	$_isReservedClassName: function (name) {
-		return name.match(/^(Array|Boolean|Date|Map|Number|Object|RegExp|String|JSX)$/) != null;
+		return name.match(/^(Array|Boolean|Date|Function|Map|Number|Object|RegExp|String|Error|EvalError|RangeError|ReferenceError|SyntaxError|TypeError|JSX)$/) != null;
 	}
 
 });
