@@ -48,9 +48,9 @@ var NodePlatform = Platform.extend({
 
 
 var JSXDoc = Class.extend({
-	$hr: "========================================",
-	$h1: "========================================",
-	$h2: "----------------------------------------",
+	$hr: "==================================================",
+	$h1: "==================================================\n",
+	$h2: "--------------------------------------------------\n",
 
 	$main: function(args) {
 		var sourceFile = args.shift();
@@ -178,7 +178,7 @@ var JSXDoc = Class.extend({
 				return false;
 			}
 
-			console.log("Inherited Members");
+			console.log("Inherited Members from %s", baseClassDef.className());
 			console.log(JSXDoc.h2);
 
 			var members = [];
