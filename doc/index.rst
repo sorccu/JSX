@@ -12,7 +12,7 @@ JSX Documentation
    introduction
    installation
    browser-application
-   class-libraries
+   library-modules
    see-also
 
 Indices and tables
