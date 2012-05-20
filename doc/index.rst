@@ -10,7 +10,9 @@ JSX Documentation
    :maxdepth: 3
 
    introduction
+   installation
    browser-application
+   see-also
 
 Indices and tables
 ==================

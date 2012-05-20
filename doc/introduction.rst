@@ -2,13 +2,8 @@
 Introduction
 ========================================
 
-DESCRIPTION
-========================================
-
-This document introduces the JSX programming launguage and describes why JSX is created and why you use it, targeting those who already know JavaScript.
-
 Overview
-----------------------------------------
+========================================
 
 JSX is a statically-typed, object-oriented programming language compiling to JavaScript. The reason why JSX is created is our needs for a more robust programming language than JavaScript. Statements and expressions are fairly close to JavaScript, though.
 
@@ -18,10 +13,19 @@ Therefore, JSX is designed as a statically-typed language. All the values and va
 
 Also, One of the most important reasons why JSX is developed is to boost JavaScript performance. JavaScript itself is not so slow but large-scale development is tend to have many abstraction layers, e.g. proxy classes and accessor methods, which often hit performance. JSX boosts performance by *inline expansion*: function bodies are expanded where the function is called if the function call can be determined at compile-time. This is the power of static typed language in performance.
 
-Basic Structure
-----------------------------------------
+Run "Hello, world!"
+========================================
 
-Here is the simplest "hello, world" program. You can see several features of JSX, namely, static types and class structure.::
+There's ``jsx`` command in the distribution, which is the JSX compiler.
+
+You can start JSX with a usual program. Type as follows in the JSX distribution and/or repository and you will see it says "Hello, world!". ::
+
+    jsx$ bin/jsx --run example/hello.jsx
+
+Basic Syntax
+========================================
+
+Here is the simplest "Hello, world" program. You can see several features of JSX in this program, namely, static types and class structure. ::
 
     // hello.jsx
     // usage: jsx --run hello.jsx
@@ -54,18 +58,18 @@ As you can see, member variables of Point, ``var x`` and ``var y``, are declared
 
 You might be surprised at multiple definition of constructors: one takes no parameters and the other takes two parameters. They are overloaded by their signatures (types of parameters). When you construct the class with ``new Point()``, the first constructor, which takes no parameters, is called. The second with two parameters will be called on ``new Point(2, 3)``. Other forms of construction, e.g. ``new Point(42)`` or ``new Pint("foo", "bar")`` will cause compilation errors of mismatching signatures.
 
-Types
-----------------------------------------
+Static Types
+========================================
 
 There are primitive types, object types, variant type, MayBeUndefined types in.
 
-Primitive types, e.g. ``string``, ``boolean`` or ``number``,  are non-nullable, immutable types.::
+Primitive types, e.g. ``string``, ``boolean`` or ``number``,  are non-nullable, immutable types. ::
 
     var s : string = "hello";
     var n : number = 42;
     var b : boolean = true;
 
-Object types, e.g. ``string[]`` (array of string) or ``Date``, are nullable, mutable types.::
+Object types, e.g. ``string[]`` (array of string) or ``Date``, are nullable, mutable types. ::
 
     var d : Date = new Date(); // Date
     var f : function():void = function() : void { log "Hi!"; };
@@ -73,7 +77,7 @@ Object types, e.g. ``string[]`` (array of string) or ``Date``, are nullable, mut
 
 Variant type has no static type info and you have to cast it to another type to use it. Some JavaScript libraries may return a variant value, which type is not determined statically.
 
-MayBeUndefined type is a meta type which indicates a value may be undefined. For example, the return type of ``Array.<string>#shift()`` is ``MayBeUndefined``. When you use a MayBeUndefined value, you have to make sure of the value is not undefined.::
+MayBeUndefined type is a meta type which indicates a value may be undefined. For example, the return type of ``Array.<string>#shift()`` is ``MayBeUndefined``. When you use a MayBeUndefined value, you have to make sure of the value is not undefined. ::
 
     function f(args : string[]) : void {
         assert args.length > 0; // make sure args.shift() returns a value
@@ -81,9 +85,9 @@ MayBeUndefined type is a meta type which indicates a value may be undefined. For
     }
 
 Modules
-----------------------------------------
+========================================
 
-You can reuse other JSX class libraries by the ``import`` statement. For example, the following program uses "timer.jsx" module, which exports a class ``Timer``.::
+JSX has module system. You can reuse JSX class libraries by the ``import`` statement. For example, the following program uses "timer.jsx" module, which exports a class ``Timer``. ::
 
     // print-after-one-sec.jsx
     // usage: jsx --run
@@ -99,15 +103,6 @@ You can reuse other JSX class libraries by the ``import`` statement. For example
 
     }
 
-A module may export a number of classes, but you can specify what modules you import or name a namespace which the module is imported into.::
+A module may export multiple classes, but you can specify what modules you import or name a namespace which the module is imported into.
 
-    import Timer from "timer.jsx"; // only Timer is imported
-    import "timer.jsx" as timer;   // timer.Timer refers the Timer class
-    import Timer from "timer.jsx" as timer; // only timer.Timer is imported
-
-SEE ALSO
-========================================
-
-* ``example/`` directory in the JSX distribution
-* `Standard ECMA-262 <http://www.ecma-international.org/publications/standards/Ecma-262-arch.htm>`_
 

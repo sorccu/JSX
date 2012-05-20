@@ -2,26 +2,27 @@
 Browser Application
 ===============================
 
-DESCRIPTION
-===============================
-
-There are browser API as a standard library.
 
 Development
--------------------------------
+===============================
+
+.. warning::
+
+    This document is under construction and JSX doesn't suport full browser binding yet.
+
 
 TODO
 
 * compiling
 * web interface
 * script loader
-* debugging source map
+* debugging with source map
 
-DOM API
--------------------------------
+Browser Binding
+===============================
 
 The ``dom`` class provied by ``js/dom.jsx`` is a low-level interface to the browser platform API.
-Here is an example to display a message box.::
+Here is an example to display a message box. ::
 
     import "js/dom.jsx";
 
@@ -35,9 +36,9 @@ Here is an example to display a message box.::
 
 .. note::
 
-    Unlike JavaScript, JSX has no global variable so you have to refer ``alert`` in the fully-qualified name, i.e. ``dom.window.alert``.
+    Unlike JavaScript, there are no global variable in JSX, so you have to refer ``alert`` in the fully-qualified name, i.e. ``dom.window.alert``.
 
-There is another example which sets a tick function in 60 FPS.::
+There is another example which sets a tick function in 60 FPS. ::
 
     class _Main {
         static tick() : void {
@@ -53,10 +54,6 @@ There is another example which sets a tick function in 60 FPS.::
         }
     }
 
-SEE ALSO
-===============================
 
-* http://www.w3.org/TR/DOM-Level-2-Core/
-* http://www.w3.org/TR/DOM-Level-3-Core/
-* http://dev.w3.org/html5/spec/
+
 
