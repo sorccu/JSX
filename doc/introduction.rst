@@ -5,13 +5,13 @@ Introduction
 Overview
 ========================================
 
-JSX is a statically-typed, object-oriented programming language compiling to JavaScript. The reason why JSX is created is our needs for a more robust programming language than JavaScript. Statements and expressions are fairly close to JavaScript, though.
+JSX is a statically-typed, object-oriented programming language compiling to JavaScript. The reason why JSX is developed is our needs for a more robust programming language than JavaScript. However, JSX is fairly close to JavaScript especially in its statements and expressions.
 
 Statically-typed programming language is robust because certain sort of problems, for example typos in function and property names, are detected at compile-time. This is important especially in middle- to large-scaled software development to which a number of engineers may get engaged.
 
 Therefore, JSX is designed as a statically-typed language. All the values and variables have a static type and you can only assign a correct-typed value to the variable. In addition, all the functions including closures have a type which is determined by the types of parameters and the return value, where you cannot call a function with wrong-typed arguments.
 
-Also, One of the most important reasons why JSX is developed is to boost JavaScript performance. JavaScript itself is not so slow but large-scale development is tend to have many abstraction layers, e.g. proxy classes and accessor methods, which often hit performance. JSX boosts performance by *inline expansion*: function bodies are expanded where the function is called if the function call can be determined at compile-time. This is the power of static typed language in performance.
+Also, other important reason why JSX is developed is to boost JavaScript performance. JavaScript itself is not so slow but large-scaled development is tend to have many abstraction layers, e.g. proxy classes and accessor methods, which often hit performance. JSX boosts performance by *inline expansion*: function bodies are expanded where the function is called if the function call can be determined at compile-time. This is the power of static typed language in performance.
 
 Run "Hello, world!"
 ========================================
