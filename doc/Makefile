@@ -41,7 +41,7 @@ help:
 clean:
 	-rm -rf $(BUILDDIR)/*
 
-html:
+html: module
 	$(SPHINXBUILD) -b html $(ALLSPHINXOPTS) $(BUILDDIR)/html
 	@echo
 	@echo "Build finished. The HTML pages are in $(BUILDDIR)/html."
@@ -151,3 +151,21 @@ doctest:
 	$(SPHINXBUILD) -b doctest $(ALLSPHINXOPTS) $(BUILDDIR)/doctest
 	@echo "Testing of doctests in the sources finished, look at the " \
 	      "results in $(BUILDDIR)/doctest/output.txt."
+
+
+# modules
+
+.PHONY: module
+
+module:
+	./jsxdoc ../lib/built-in.jsx built-in.jsx > module-built-in.rst
+	./jsxdoc ../lib/js/js.jsx js.jsx > module-js.rst
+	./jsxdoc ../lib/common/test-case.jsx test-case.jsx > module-test-case.rst
+	./jsxdoc ../lib/js/console.jsx console.jsx > module-console.rst
+	./jsxdoc ../lib/js/timer.jsx timer.jsx > module-timer.rst
+	./jsxdoc ../lib/js/typedarray.jsx typedarray.jsx > module-typedarray.rst
+	./jsxdoc ../lib/js/js/dom.jsx js/dom.jsx > module-js-dom.rst
+	./jsxdoc ../lib/js/js/dom/canvas2d.jsx js/dom/canvas2d.jsx > module-js-dom-canvas2d.rst
+	./jsxdoc ../lib/js/js/dom/webgl.jsx js/dom/webgl.jsx > module-js-dom-webgl.rst
+
+

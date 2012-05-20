@@ -7,11 +7,12 @@ JSX Documentation
 ===============================
 
 .. toctree::
-   :maxdepth: 3
+   :maxdepth: 2
 
    introduction
    installation
    browser-application
+   class-libraries
    see-also
 
 Indices and tables
