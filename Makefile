@@ -26,4 +26,7 @@ web:
 server:
 	node web/server.js
 
+install:
+	npm install -g .
+
 .PHONY: test web server
