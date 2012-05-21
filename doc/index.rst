@@ -12,6 +12,7 @@ JSX Documentation
    introduction
    installation
    browser-application
+   synonym
    library-modules
    see-also
 
