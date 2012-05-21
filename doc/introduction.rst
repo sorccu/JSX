@@ -91,7 +91,7 @@ MayBeUndefined type is a meta type which indicates a value may be undefined. For
 
 .. note::
 
-    Static types exist only at compile time. That is, run-time representation of a value has no information about its static type. For example, the run-time representation of ``var a : MayBeUndefined.<number> = 10` is the same as ``var b : number = 10``.
+    Static types exist only at compile time. That is, run-time representation of a value has no information about its static type. For example, the run-time representation of ``var a : MayBeUndefined.<number> = 10`` is the same as ``var b : number = 10``.
 
 Modules
 ========================================
