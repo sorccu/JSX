@@ -16,13 +16,13 @@ Also, other important reason why JSX is developed is to boost JavaScript perform
 Run "Hello, world!"
 ========================================
 
-There's ``jsx`` command in the distribution, which is the JSX compiler.
+There's ``jsx`` command in the SDK, which is the JSX compiler.
 
 You can start JSX with a usual program. Type as follows in the JSX distribution and/or repository and you will see it says "Hello, world!". ::
 
     jsx$ bin/jsx --run example/hello.jsx
 
-Basic Syntax
+Class Structure
 ========================================
 
 Here is the simplest "Hello, world" program. You can see several features of JSX in this program, namely, static types and class structure. ::
@@ -38,7 +38,7 @@ Here is the simplest "Hello, world" program. You can see several features of JSX
         }
     }
 
-Class ``_Main`` has a static function (a.k.a. a class method) named ``main``, which takes an array of strings and returns nothing. ``Main._main(:string[]):void`` is an entry point of JSX applications, which is called when a user invokes an application.
+Class ``_Main`` has a static member function (a.k.a. a class method) named ``main``, which takes an array of strings and returns nothing. ``Main._main(:string[]):void`` is an entry point of JSX applications, which is called when a user invokes an application. JSX, like Java, doesn't allow top-level statements which most scripting languages do.
 
 ``log`` statement is mapped to ``console.log()`` in JavaScript, which displays the argument to stdout with a newline.
 
@@ -48,6 +48,11 @@ Here is another typical library class, ``Point``: ::
         var x = 0;
         var y = 0;
 
+        // without arguments
+        function constructor() {
+        }
+
+        // with arguments
         function constructor(x :number, y :number) {
             this.x = x;
             this.y = y;
@@ -61,7 +66,7 @@ You might be surprised at multiple definition of constructors: one takes no para
 Static Types
 ========================================
 
-There are primitive types, object types, variant type, MayBeUndefined types in.
+There are primitive types, object types, variant type, MayBeUndefined types in JSX. They are static types which appear only at compile time.
 
 Primitive types, e.g. ``string``, ``boolean`` or ``number``,  are non-nullable, immutable types. ::
 
@@ -83,6 +88,10 @@ MayBeUndefined type is a meta type which indicates a value may be undefined. For
         assert args.length > 0; // make sure args.shift() returns a value
         var value = args.shift() as string;
     }
+
+:.. note::
+
+    Static types exist only at compile time. That is, run-time representation of a value has no information about its static type. For example, the run-time representation of ``var a : MayBeUndefined.<number> = 10` is the same as ``var b : number = 10``.
 
 Modules
 ========================================
