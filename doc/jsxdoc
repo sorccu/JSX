@@ -88,39 +88,61 @@ var JSXDoc = Class.extend({
 
 	},
 
+	$isPrivate: function (name) {
+		return (/^_/).test(name);
+	},
+	$varDecl: function (member) {
+		var isConst = (member.flags() & ClassDefinition.IS_CONST) !== 0;
+		return isConst ? "const" : "var";
+	},
+
 	$processClassDef: function(classDef) {
 		// H1 class name
 		console.log(classDef.className());
 		console.log(JSXDoc.h1);
 		console.log("");
+		if(JSXDoc.isPrivate(classDef.className())) {
+			console.log("This is not exported by default.");
+			console.log("");
+		}
 
 		// FIXME: print class hierarchy
 
-		var varDecl = function (member) {
-			var isConst = (member.flags() & ClassDefinition.IS_CONST) !== 0;
-			return isConst ? "const" : "var";
-		};
-
 		// members
-		console.log("Static Member Variables");
-		console.log(JSXDoc.h2);
+
+		var members;
+
+		// static member variables
+		members = [];
 		classDef.forEachMemberVariable(function(member) {
 			if((member.flags() & ClassDefinition.IS_STATIC) === 0) {
 				return true;
 			}
-			console.log("* static %s %s : %s",
-						varDecl(member),
+			if(JSXDoc.isPrivate(member.name())) {
+				return true;
+			}
+			members.push(Util.format("* static %1 %2 : %3", [
+						JSXDoc.varDecl(member),
 						member.name(),
-						member.getType().toString());
+						member.getType().toString()]));
 			return true;
 		});
-		console.log("");
+		if(members.length > 0) {
+			console.log("Static Member Variables");
+			console.log(JSXDoc.h2);
+			members.forEach(function(s) {
+				console.log(s);
+			});
+			console.log("");
+		}
 
-
-		console.log("Static Member Functions");
-		console.log(JSXDoc.h2);
+		// static member functions
+		members = [];
 		classDef.forEachMemberFunction(function(member) {
 			if((member.flags() & ClassDefinition.IS_STATIC) === 0) {
+				return true;
+			}
+			if(JSXDoc.isPrivate(member.name())) {
 				return true;
 			}
 			var args = member.getArguments().map(function(arg) {
@@ -129,33 +151,52 @@ var JSXDoc = Class.extend({
 				return Util.format("%1 : %2", [argName, argType]);
 			});
 
-			console.log("* static function %s(%s) : %s",
+			members.push(Util.format("* static function %1(%2) : %3", [
 						member.name(),
 						args.join(", "),
-						member.getReturnType().toString());
+						member.getReturnType().toString()]));
 			return true;
 		});
-		console.log("");
+		if(members.length > 0) {
+			console.log("Static Member Functions");
+			console.log(JSXDoc.h2);
+			members.forEach(function(s) {
+				console.log(s);
+			});
+			console.log("");
+		}
 
-		console.log("Member Variables");
-		console.log(JSXDoc.h2);
+		// member variables
+		members = [];
 		classDef.forEachMemberVariable(function(member) {
 			if((member.flags() & ClassDefinition.IS_STATIC) !== 0) {
 				return true;
 			}
-
-			console.log("* %s %s : %s",
-						varDecl(member),
+			if(JSXDoc.isPrivate(member.name())) {
+				return true;
+			}
+			members.push(Util.format("* %1 %2 : %3", [
+						JSXDoc.varDecl(member),
 						member.name(),
-						member.getType().toString());
+						member.getType().toString()]));
 			return true;
 		});
-		console.log("");
+		if(members.length > 0) {
+			console.log("Member Variables");
+			console.log(JSXDoc.h2);
+			members.forEach(function(s) {
+				console.log(s);
+			});
+			console.log("");
+		}
 
-		console.log("Member Functions");
-		console.log(JSXDoc.h2);
+		// member functions
+		members = [];
 		classDef.forEachMemberFunction(function(member) {
 			if((member.flags() & ClassDefinition.IS_STATIC) !== 0) {
+				return true;
+			}
+			if(JSXDoc.isPrivate(member.name())) {
 				return true;
 			}
 			var args = member.getArguments().map(function(arg) {
@@ -164,13 +205,20 @@ var JSXDoc = Class.extend({
 				return Util.format("%1 : %2", [argName, argType]);
 			});
 
-			console.log("* function %s(%s) : %s",
+			members.push(Util.format("* function %1(%2) : %3", [
 						member.name(),
 						args.join(", "),
-						member.getReturnType().toString());
+						member.getReturnType().toString()]));
 			return true;
 		});
-		console.log("");
+		if(members.length > 0) {
+			console.log("Member Functions");
+			console.log(JSXDoc.h2);
+			members.forEach(function(s) {
+				console.log(s);
+			});
+			console.log("");
+		}
 
 		// inherited members
 		classDef.extendClassDef() && classDef.forEachClassFromBase(function(baseClassDef) {
@@ -186,6 +234,9 @@ var JSXDoc = Class.extend({
 				if((member.flags() & ClassDefinition.IS_STATIC) === 0) {
 					return true;
 				}
+				if(JSXDoc.isPrivate(member.name())) {
+					return true;
+				}
 				members.push(member.name());
 				return true;
 			});
@@ -196,6 +247,9 @@ var JSXDoc = Class.extend({
 			members = [];
 			baseClassDef.forEachMemberFunction(function(member) {
 				if((member.flags() & ClassDefinition.IS_STATIC) !== 0) {
+					return true;
+				}
+				if(JSXDoc.isPrivate(member.name())) {
 					return true;
 				}
 				members.push(member.name() + "()");
@@ -210,6 +264,9 @@ var JSXDoc = Class.extend({
 				if((member.flags() & ClassDefinition.IS_STATIC) !== 0) {
 					return true;
 				}
+				if(JSXDoc.isPrivate(member.name())) {
+					return true;
+				}
 				members.push(member.name());
 				return true;
 			});
@@ -220,6 +277,9 @@ var JSXDoc = Class.extend({
 			members = [];
 			baseClassDef.forEachMemberFunction(function(member) {
 				if((member.flags() & ClassDefinition.IS_STATIC) === 0) {
+					return true;
+				}
+				if(JSXDoc.isPrivate(member.name())) {
 					return true;
 				}
 				members.push(member.name() + "()");
