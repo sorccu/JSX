@@ -82,14 +82,14 @@ Object types, e.g. ``string[]`` (array of string) or ``Date``, are nullable, mut
 
 Variant type has no static type info and you have to cast it to another type to use it. Some JavaScript libraries may return a variant value, which type is not determined statically.
 
-MayBeUndefined type is a meta type which indicates a value may be undefined. For example, the return type of ``Array.<string>#shift()`` is ``MayBeUndefined``. When you use a MayBeUndefined value, you have to make sure of the value is not undefined. ::
+MayBeUndefined type is a meta type which indicates a value may be undefined. For example, the return type of ``Array.<string>#shift()`` is ``MayBeUndefined.<string>``. When you use a MayBeUndefined value, you have to make sure of the value is not undefined. ::
 
     function f(args : string[]) : void {
         assert args.length > 0; // make sure args.shift() returns a value
         var value = args.shift() as string;
     }
 
-:.. note::
+.. note::
 
     Static types exist only at compile time. That is, run-time representation of a value has no information about its static type. For example, the run-time representation of ``var a : MayBeUndefined.<number> = 10` is the same as ``var b : number = 10``.
 
