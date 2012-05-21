@@ -5,7 +5,7 @@ Introduction
 Overview
 ========================================
 
-JSX is a statically-typed, object-oriented programming language compiling to JavaScript. The reason why JSX is developed is our needs for a more robust programming language than JavaScript. However, JSX is fairly close to JavaScript especially in its statements and expressions.
+JSX is a statically-typed, object-oriented programming language compiling to standalone JavaScript. The reason why JSX is developed is our needs for a more robust programming language than JavaScript. However, JSX is fairly close to JavaScript especially in its statements and expressions.
 
 Statically-typed programming language is robust because certain sort of problems, for example typos in function and property names, are detected at compile-time. This is important especially in middle- to large-scaled software development to which a number of engineers may get engaged.
 
