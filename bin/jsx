@@ -456,7 +456,13 @@ function getEnvOpts() {
 	return opts.split(/\s+/);
 }
 
-JSX.main(getEnvOpts().concat(process.argv.slice(2)));
+if (process.argv[1] == __filename) {
+	JSX.main(getEnvOpts().concat(process.argv.slice(2)));
+}
+else {
+	exports.JSXCommand   = JSX;
+	exports.NodePlatform = NodePlatform;
+}
 
 // vim: set ft=javascript:
 // vim: set noexpandtab:
