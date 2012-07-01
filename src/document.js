@@ -58,9 +58,9 @@ var DocumentRequest = exports.DocumentRequest = Class.extend({
 	},
 
 	/**
-	 * get the document if it exists and clear the document buffer.
+	 * consume the document if it exists and clear the document buffer.
 	 */
-	requireDocument: function () {
+	useDocument: function () {
 		var doc = this._preparedDoc; // null if there's no document
 		this._preparedDoc = null;
 		return doc;

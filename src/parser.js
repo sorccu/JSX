@@ -936,7 +936,7 @@ var Parser = exports.Parser = Class.extend({
 		this._extendType = null;
 		this._implementTypes = [];
 		this._objectTypesUsed = [];
-		var classDoc = this._documentRequest ? this._documentRequest.getDocument() : null;
+		var classDoc = this._documentRequest ? this._documentRequest.useDocument() : null;
 		// attributes* class
 		var flags = 0;
 		while (true) {
@@ -1108,7 +1108,7 @@ var Parser = exports.Parser = Class.extend({
 	},
 
 	_memberDefinition: function (classFlags) {
-		var doc = this._documentRequest ? this._documentRequest.getDocument() : null;
+		var doc = this._documentRequest ? this._documentRequest.useDocument() : null;
 		var flags = 0;
 		while (true) {
 			var token = this._expect([ "function", "var", "static", "abstract", "override", "final", "const", "native", "__readonly__", "inline" ]);

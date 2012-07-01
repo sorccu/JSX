@@ -14,7 +14,7 @@ eval(Class.$import("../src/util"));
 
 var FormatReST = Class.extend({
 	title: Util.repeat("=", 78),
-	
+
 	classSection:  Util.repeat("*", 78) + "\n",
 	memberSection: Util.repeat("-", 78) + "\n",
 
@@ -94,7 +94,7 @@ var FormatReST = Class.extend({
 		console.log(this.title);
 		console.log("");
 	},
-	
+
 	writeFooter: function () {
 		console.log("");
 	},
@@ -108,7 +108,7 @@ var FormatReST = Class.extend({
 			return true;
 		}.bind(this));
 	},
-	
+
 	writeComment: function (p) {
 		var lines = p.split(/\n/);
 		console.log(".. " + lines.shift());
@@ -218,6 +218,7 @@ var FormatReST = Class.extend({
 					}
 					var attr = this.formatFlags(flags);
 
+
 					var args = member.getArguments().map(function (p) {
 						return Util.format("%1 : %2",
 							[p.getName().getValue(), p.getType().toString()]);
@@ -238,21 +239,56 @@ var FormatReST = Class.extend({
 
 				this.writeParagraph(decl);
 
-				// doc
-				var doc = member.getDocument();
-				if (doc) {
-					var d = doc.getDescription();
-					if (d) {
-						this.writeParagraph(d);
-					}
-					var tag = doc.getTag();
-					for (var name in tag) {
-						this.writeComment("@" + name + " " + tag[name].join("\n")); // FIXME
-					}
-				}
+				this.writeMemberDoc(member);
 			}.bind(this));
 		}
 		console.log("");
+	},
+
+	writeMemberDoc: function (member) {
+		var doc = member.getDocument();
+		if (! doc) {
+			return;
+		}
+
+		var d = doc.getDescription();
+		if (d) {
+			this.writeParagraph(d);
+		}
+		var tag = doc.getTag();
+
+		var param = tag["param"];
+		delete tag["param"];
+
+		if (param && member instanceof MemberFunctionDefinition) {
+			var paramMap = {};
+			param.forEach(function (p) {
+				var a = p.split(/\s+/);
+				var paramName = a.shift();
+				var paramDesc = a.join(" ");
+				paramMap[paramName] = paramDesc;
+			});
+			member.getArguments().forEach(function (p) {
+				var name = p.getName().getValue();
+				console.log("``"+name+"``");
+				console.log("  " + paramMap[name]);
+				console.log("");
+			});
+		}
+
+		var ret = tag["return"];
+		delete tag["return"];
+		if (ret) {
+			console.log("return");
+			console.log("  " + ret.join("\n  "));
+			console.log("");
+		}
+
+		// FIXME process tags
+		// currently the rest of the tags are embed as comments
+		for (var name in tag) {
+			this.writeComment("@" + name + " " + tag[name].join("\n"));
+		}
 	},
 
 	processClassDef: function(classDef) {
@@ -262,7 +298,7 @@ var FormatReST = Class.extend({
 			return (member.flags() & ClassDefinition.IS_STATIC) !== 0 &&
 				member instanceof MemberFunctionDefinition;
 		});
-		
+
 		this.writeMembers(classDef, function (member) {
 			return (member.flags() & ClassDefinition.IS_STATIC) !== 0 &&
 				member instanceof MemberVariableDefinition;
@@ -272,7 +308,7 @@ var FormatReST = Class.extend({
 			return (member.flags() & ClassDefinition.IS_STATIC) === 0 &&
 				member instanceof MemberFunctionDefinition;
 		});
-		
+
 		this.writeMembers(classDef, function (member) {
 			return (member.flags() & ClassDefinition.IS_STATIC) === 0 &&
 				member instanceof MemberVariableDefinition;
