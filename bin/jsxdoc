@@ -141,7 +141,7 @@ var FormatReST = Class.extend({
 	},
 
 	writeMembers: function (classDef, predicate) {
-		var members = Object.create(null);
+		var members = {};
 
 		classDef.forEachMember(function(member) {
 			if (! predicate(member)) {
@@ -151,7 +151,7 @@ var FormatReST = Class.extend({
 			if (this.shouldSkip(name)) {
 				return true;
 			}
-			if (! members[name]) {
+			if (! members.hasOwnProperty(name)) {
 				members[name] = [];
 			}
 			members[name].push(member);
