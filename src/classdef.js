@@ -99,11 +99,12 @@ var ClassDefinition = exports.ClassDefinition = Class.extend({
 	$IS_READONLY: 512,
 	$IS_INLINE: 1024,
 
-	constructor: function (token, className, flags, extendType, implementTypes, members, objectTypesUsed) {
+	constructor: function (token, className, flags, doc, extendType, implementTypes, members, objectTypesUsed) {
 		this._token = token;
 		this._className = className;
 		this._outputClassName = null;
 		this._flags = flags;
+		this._document = doc;
 		this._extendType = extendType; // null for interfaces, mixins, and Object class only
 		this._implementTypes = implementTypes;
 		this._members = members;
@@ -327,6 +328,7 @@ var ClassDefinition = exports.ClassDefinition = Class.extend({
 				this._token,
 				new Parser.Token("constructor", true),
 				ClassDefinition.IS_FINAL | (this.flags() & ClassDefinition.IS_NATIVE),
+				null, // doc
 				Type.Type.voidType,
 				[],
 				isNative ? null : [],
@@ -690,18 +692,22 @@ var ClassDefinition = exports.ClassDefinition = Class.extend({
 				return false;
 		}
 		return true;
-	}
+	},
 
+	getDocument: function () {
+		return this._document;
+	}
 });
 
 // abstract class deriving Member(Function|Variable)Definition
 var MemberDefinition = exports.MemberDefinition = Class.extend({
 
-	constructor: function (token, nameToken, flags) {
+	constructor: function (token, nameToken, flags, doc) {
 		this._token = token;
 		this._nameToken = nameToken; // may be null
 		if(typeof(nameToken) === "string") throw new Error("nameToken must be a Token object or null!");
 		this._flags = flags;
+		this._document = doc;
 		this._classDef = null;
 		this._optimizerStash = {};
 	},
@@ -737,8 +743,11 @@ var MemberDefinition = exports.MemberDefinition = Class.extend({
 
 	getOptimizerStash: function () {
 		return this._optimizerStash;
-	}
+	},
 
+	getDocument: function () {
+		return this._document;
+	}
 });
 
 var MemberVariableDefinition = exports.MemberVariableDefinition = MemberDefinition.extend({
@@ -748,8 +757,8 @@ var MemberVariableDefinition = exports.MemberVariableDefinition = MemberDefiniti
 	$ANALYZE_SUCEEDED: 2,
 	$ANALYZE_FAILED: 3,
 
-	constructor: function (token, name, flags, type, initialValue) {
-		MemberDefinition.call(this, token, name, flags);
+	constructor: function (token, name, flags, doc, type, initialValue) {
+		MemberDefinition.call(this, token, name, flags, doc);
 		this._type = type; // may be null
 		this._initialValue = initialValue; // may be null
 		this._analyzeState = MemberVariableDefinition.NOT_ANALYZED;
@@ -765,7 +774,7 @@ var MemberVariableDefinition = exports.MemberVariableDefinition = MemberDefiniti
 		} else {
 			initialValue = Expression.Expression.getDefaultValueExpressionOf(type);
 		}
-		return new MemberVariableDefinition(this._token, this._nameToken, this._flags, type, initialValue);
+		return new MemberVariableDefinition(this._token, this._nameToken, this._flags, this._document, type, initialValue);
 	},
 
 	serialize: function () {
@@ -825,8 +834,8 @@ var MemberVariableDefinition = exports.MemberVariableDefinition = MemberDefiniti
 
 var MemberFunctionDefinition = exports.MemberFunctionDefinition = MemberDefinition.extend({
 
-	constructor: function (token, name, flags, returnType, args, locals, statements, closures, lastTokenOfBody) {
-		MemberDefinition.call(this, token, name, flags);
+	constructor: function (token, name, flags, doc, returnType, args, locals, statements, closures, lastTokenOfBody) {
+		MemberDefinition.call(this, token, name, flags, doc);
 		this._returnType = returnType;
 		this._args = args;
 		this._locals = locals;
@@ -918,7 +927,7 @@ var MemberFunctionDefinition = exports.MemberFunctionDefinition = MemberDefiniti
 		} else {
 			returnType = null;
 		}
-		return new MemberFunctionDefinition(this._token, this._nameToken, this._flags, returnType, args, locals, statements, closures, null);
+		return new MemberFunctionDefinition(this._token, this._nameToken, this._flags, this._document, returnType, args, locals, statements, closures, null);
 	},
 
 	serialize: function () {
@@ -1185,7 +1194,7 @@ var MemberFunctionDefinition = exports.MemberFunctionDefinition = MemberDefiniti
 				if (! cb(this._closures[i]))
 					return false;
 		return true;
-	}
+	},
 
 });
 
@@ -1375,9 +1384,10 @@ var LocalVariableStatuses = exports.LocalVariableStatuses = Class.extend({
 
 var TemplateClassDefinition = exports.TemplateClassDefinition = Class.extend({
 
-	constructor: function (className, flags, typeArgs, extendType, implementTypes, members, objectTypesUsed) {
+	constructor: function (className, flags, doc, typeArgs, extendType, implementTypes, members, objectTypesUsed) {
 		this._className = className;
 		this._flags = flags;
+		this._document = doc;
 		this._typeArgs = typeArgs;
 		this._extendType = extendType;
 		this._implementTypes = implementTypes;
@@ -1431,6 +1441,7 @@ var TemplateClassDefinition = exports.TemplateClassDefinition = Class.extend({
 		var instantiatedDef = new InstantiatedClassDefinition(
 			this._className,
 			this._flags,
+			this._document,
 			request.getTypeArguments(),
 			this._extendType != null ? this._extendType.instantiate(instantiationContext): null,
 			this._implementTypes.map(function (t) { return t.instantiate(instantiationContext); }),
@@ -1444,12 +1455,13 @@ var TemplateClassDefinition = exports.TemplateClassDefinition = Class.extend({
 
 var InstantiatedClassDefinition = exports.InstantiatedClassDefinition = ClassDefinition.extend({
 
-	constructor: function (templateClassName, flags, typeArguments, extendType, implementTypes, members, objectTypesUsed) {
+	constructor: function (templateClassName, flags, doc, typeArguments, extendType, implementTypes, members, objectTypesUsed) {
 		ClassDefinition.prototype.constructor.call(
 			this,
 			null,
 			Type.Type.templateTypeToString(templateClassName, typeArguments),
 			flags,
+			doc,
 			extendType,
 			implementTypes,
 			members,
