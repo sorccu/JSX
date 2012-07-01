@@ -35,6 +35,9 @@ var DocumentRequest = exports.DocumentRequest = Class.extend({
 		return s.replace(/^\s+/, "").replace(/\s+$/, "");
 	},
 
+	/**
+	 * call parse() before parsing documentable entity
+	 */
 	parse: function (comment) {
 		comment = comment.replace(/^\/\*/, "").replace(/\*\/$/, "").replace(/^\s*\*/mg, "");
 		var tag = {};
@@ -54,7 +57,10 @@ var DocumentRequest = exports.DocumentRequest = Class.extend({
 		this._preparedDoc = doc;
 	},
 
-	getDocument: function () {
+	/**
+	 * get the document if it exists and clear the document buffer.
+	 */
+	requireDocument: function () {
 		var doc = this._preparedDoc; // null if there's no document
 		this._preparedDoc = null;
 		return doc;
