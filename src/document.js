@@ -27,18 +27,19 @@ eval(Class.$import("./util"));
 
 var DocumentRequest = exports.DocumentRequest = Class.extend({
 
-	constructor: function () {
-		this._prepqredDoc = null;
+	constructor: function (parser, startLineNumber, startColumnOffset, endLineNumber, endColumnOffset) {
+		this._parser = parser;
+		this._startLineNumber   = startLineNumber;
+		this._startColumnOffset = startColumnOffset;
+		this._endLineNumber     = endLineNumber;
+		this._endColumnOffset   = endColumnOffset;
 	},
 
 	_trim: function (s) {
 		return s.replace(/^\s+/, "").replace(/\s+$/, "");
 	},
 
-	/**
-	 * call parse() before parsing documentable entity
-	 */
-	parse: function (comment) {
+	_parse: function (comment) {
 		comment = comment.replace(/^\/\*/, "").replace(/\*\/$/, "").replace(/^\s*\*/mg, "");
 		var tag = {};
 		var description = comment.replace(/^\s*\@\s*(\w+)([^\n]+)/gm, function (_, name, desc) {
@@ -50,34 +51,26 @@ var DocumentRequest = exports.DocumentRequest = Class.extend({
 			return "";
 		}.bind(this))
 
-		var doc = new Document();
-		doc.setDescription(this._trim(description));
-		doc.setTag(tag);
-
-		this._preparedDoc = doc;
+		this._description = this._trim(description);
+		this._tag         = tag;
 	},
 
-	/**
-	 * consume the document if it exists and clear the document buffer.
-	 */
-	useDocument: function () {
-		var doc = this._preparedDoc; // null if there's no document
-		this._preparedDoc = null;
-		return doc;
+	// lazy initialize
+	_initializeFromParser: function () {
+		this._parse(this._parser.getInputByRange(this._startLineNumber, this._startColumnOffset, this._endLineNumber, this._endColumnOffset));
+		this._parser = null;
 	},
-});
 
-var Document = exports.Document = Class.extend({
 	getDescription: function () {
+		if (this._parser) {
+			this._initializeFromParser();
+		}
 		return this._description;
 	},
-	setDescription: function (description) {
-		this._description = description;
-	},
 	getTag: function () {
+		if (this._parser) {
+			this._initializeFromParser();
+		}
 		return this._tag;
 	},
-	setTag: function (tag) {
-		this._tag = tag;
-	}
 });

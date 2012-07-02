@@ -394,11 +394,10 @@ var QualifiedName = exports.QualifiedName = Class.extend({
 
 var Parser = exports.Parser = Class.extend({
 
-	constructor: function (sourceToken, filename, completionRequest, documentRequest) {
+	constructor: function (sourceToken, filename, completionRequest) {
 		this._sourceToken = sourceToken;
 		this._filename = filename;
 		this._completionRequest = completionRequest;
-		this._documentRequest = documentRequest || new DocumentRequest();
 	},
 
 	parse: function (input, errors) {
@@ -454,6 +453,15 @@ var Parser = exports.Parser = Class.extend({
 
 	_getInputByLength: function (length) {
 		return this._lines[this._lineNumber - 1].substring(this._columnOffset, this._columnOffset + length);
+	},
+
+	getInputByRange: function (startLineNumber, startColumnOffset, endLineNumber, endColumnOffset) {
+		var s= this._lines[startLineNumber-1].slice(startColumnOffset) + "\n";
+		var end = endLineNumber - 1;
+		for (var i = startLineNumber; i < end; ++i) {
+			s += this._lines[i] + "\n";
+		}
+		return s + this._lines[end].slice(0, endColumnOffset);
 	},
 
 	_forwardPos: function (len) {
@@ -669,8 +677,8 @@ var Parser = exports.Parser = Class.extend({
 			var endAt = this._getInput(this._columnOffset).indexOf("*/");
 			if (endAt != -1) {
 				this._forwardPos(endAt + 2);
-				if (isDoc && this._documentRequest) {
-					this._parseDoc(startLineNumber, startColumnOffset);
+				if (isDoc) {
+					this._preparedDocument = new DocumentRequest(this, startLineNumber, startColumnOffset, this._lineNumber, this._columnOffset);
 				}
 				return true;
 			}
@@ -684,15 +692,10 @@ var Parser = exports.Parser = Class.extend({
 		}
 	},
 
-	_parseDoc: function (startLineNumber, startColumnOffset) {
-		var comments = this._lines[startLineNumber-1].slice(startColumnOffset) + "\n";
-		var end = this._lineNumber-1;
-		for (var i = startLineNumber; i < end; ++i) {
-			comments += this._lines[i] + "\n";
-		}
-		comments += this._lines[end].slice(0, this._columnOffset);
-
-		this._documentRequest.parse(comments);
+	_useDocument: function () {
+		var doc = this._preparedDocument; // null if there's no document
+		this._preparedDocument = null;
+		return doc;
 	},
 
 	_isEOF: function () {
@@ -936,7 +939,7 @@ var Parser = exports.Parser = Class.extend({
 		this._extendType = null;
 		this._implementTypes = [];
 		this._objectTypesUsed = [];
-		var classDoc = this._documentRequest ? this._documentRequest.useDocument() : null;
+		var classDoc = this._useDocument();
 		// attributes* class
 		var flags = 0;
 		while (true) {
@@ -1108,7 +1111,7 @@ var Parser = exports.Parser = Class.extend({
 	},
 
 	_memberDefinition: function (classFlags) {
-		var doc = this._documentRequest ? this._documentRequest.useDocument() : null;
+		var doc = this._useDocument();
 		var flags = 0;
 		while (true) {
 			var token = this._expect([ "function", "var", "static", "abstract", "override", "final", "const", "native", "__readonly__", "inline" ]);
