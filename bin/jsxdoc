@@ -1,5 +1,13 @@
 #!/usr/bin/env node
 
+/**
+ * jsxdoc - JSX Documentation Tool
+ *
+ *
+ * @see javadoc - http://www.oracle.com/technetwork/java/javase/documentation/index-jsp-135444.html
+ * @see jsdoc-toolkit - http://code.google.com/p/jsdoc-toolkit/
+ */
+
 var path  = require("path");
 var NodePlatform  = require("./jsx").NodePlatform;
 
