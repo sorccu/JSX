@@ -103,28 +103,23 @@ var _Lexer = exports._TokenTable = Class.extend({
 		var stringLiteral = this.makeAlt([singleQuoted, doubleQuoted]);
 		var regexpLiteral = doubleQuoted.replace(/"/g, "/") + "[mgi]*";
 
-		// ECMA 262 compatible,
-		// see also ECMA 262 5th (7.8.3) Numeric Literals
+		// ECMA 262 5th (7.8.3) Numeric Literals
 		var decimalIntegerLiteral = "(?: 0 | [1-9][0-9]* )";
-		var exponentPart = "(?: [eE] [+-]? [0-9]+ )";
+		var exponentPartOpt = "(?: [eE] [+-]? [0-9]+ )?";
 		var numberLiteral = this.makeAlt([
-				"(?: " + decimalIntegerLiteral + " \\. " +
-				        "[0-9]* " + exponentPart + "? )",
-				"(?: \\. [0-9]+ " + exponentPart + "? )",
-				"(?: " + decimalIntegerLiteral + exponentPart + " )",
+				"(?: " + decimalIntegerLiteral + "\\." +
+				        "[0-9]* " + exponentPartOpt + " )",
+				"(?: \\. [0-9]+ " + exponentPartOpt + " )",
+				"(?: " + decimalIntegerLiteral + exponentPartOpt + " )",
+				"(?: 0 [xX] [0-9a-fA-F]+ )", // hex
 				"NaN",
 				"Infinity"
 			]) + "\\b";
-		var integerLiteral = this.makeAlt([
-				"(?: 0 [xX] [0-9a-fA-F]+ )", // hex
-				decimalIntegerLiteral
-			]) + "(?![\\.0-9eE])\\b";
 
 		// regular expressions
 		this.rxIdent          = this.rx("^" + ident);
 		this.rxStringLiteral  = this.rx("^" + stringLiteral);
 		this.rxNumberLiteral  = this.rx("^" + numberLiteral);
-		this.rxIntegerLiteral = this.rx("^" + integerLiteral);
 		this.rxRegExpLiteral  = this.rx("^" + regexpLiteral);
 		this.rxNewline        = /(?:\r\n?|\n)/;
 
@@ -781,9 +776,7 @@ var Parser = exports.Parser = Class.extend({
 
 	_expectNumberLiteralOpt: function () {
 		this._advanceToken();
-		var matched = this._getInput().match(_Lexer.rxIntegerLiteral);
-		if (matched == null)
-			matched = this._getInput().match(_Lexer.rxNumberLiteral);
+		var matched = this._getInput().match(_Lexer.rxNumberLiteral);
 		if (matched == null)
 			return null;
 		this._tokenLength = matched[0].length;

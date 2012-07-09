@@ -33,7 +33,6 @@ function main() {
 
     // Testing the following patterns:
     var rxIdent          = TT.rxIdent;
-    var rxIntegerLiteral = TT.rxIntegerLiteral;
     var rxNumberLiteral  = TT.rxNumberLiteral;
     var rxStringLiteral  = TT.rxStringLiteral;
     var rxRegExpLiteral  = TT.rxRegExpLiteral;
@@ -75,9 +74,16 @@ function main() {
 
     test.describe('tokenize numbers', function(t) {
         var good = [
+            "1",
+            "42",
+            "1234567890",
+            "0xabcdef123",
+            "0XABCDEF123",
             "123456789.0",
             "3.14",
             ".012",
+            ".012e2",
+            //TODO "42.",
             "0.012",
             "0.012e8",
             "0.e8",
@@ -88,14 +94,16 @@ function main() {
             "0E0",
             "NaN",
             "Infinity",
-            "0.0"
+            "0.0",
+            "0"
         ];
         var bad = [
             "1a2",
             "1x2",
+            "00",
+            "0777",
             "foo",
             "..2",
-            "2..",
             "x2",
             "!42",
             "+",
@@ -108,38 +116,6 @@ function main() {
 
         t.done();
     });
-    test.describe('tokenize integers', function(t) {
-        var good = [
-            "1",
-            "42",
-            "1234567890",
-            "0xabcdef123",
-            "0XABCDEF123",
-
-            "0"
-            // TODO: list ECMA 262 compatible
-        ];
-        var bad = [
-            "3.14",
-            ".012",
-            "0.012",
-            "0.012e8",
-            "0.e8",
-            "1e32",
-            "1E32",
-            "0E0",
-            "0xGG",
-            "0xZZ",
-            "088",
-            "0b1212",
-
-            "+"
-        ];
-
-        lexerTest(t, rxIntegerLiteral, good, bad);
-        t.done();
-    });
-
 
     test.describe("tokenize strings", function(t) {
         var good = [
