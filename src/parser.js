@@ -107,14 +107,14 @@ var _Lexer = exports._TokenTable = Class.extend({
 		var decimalIntegerLiteral = "(?: 0 | [1-9][0-9]* )";
 		var exponentPartOpt = "(?: [eE] [+-]? [0-9]+ )?";
 		var numberLiteral = this.makeAlt([
+				"(?: 0 [xX] [0-9a-fA-F]+ )", // hex
 				"(?: " + decimalIntegerLiteral + "\\." +
 				        "[0-9]* " + exponentPartOpt + " )",
 				"(?: \\. [0-9]+ " + exponentPartOpt + " )",
 				"(?: " + decimalIntegerLiteral + exponentPartOpt + " )",
-				"(?: 0 [xX] [0-9a-fA-F]+ )", // hex
 				"NaN",
 				"Infinity"
-			]) + "\\b";
+			]);
 
 		// regular expressions
 		this.rxIdent          = this.rx("^" + ident);
