@@ -120,6 +120,7 @@ var _Lexer = exports._TokenTable = Class.extend({
 		this.rxIdent          = this.rx("^" + ident);
 		this.rxStringLiteral  = this.rx("^" + stringLiteral);
 		this.rxNumberLiteral  = this.rx("^" + numberLiteral);
+		this.rxNumberLiteralRoughly = this.rx("^" + numberLiteral + "[a-zA-Z]*");
 		this.rxRegExpLiteral  = this.rx("^" + regexpLiteral);
 		this.rxNewline        = /(?:\r\n?|\n)/;
 
@@ -776,11 +777,20 @@ var Parser = exports.Parser = Class.extend({
 
 	_expectNumberLiteralOpt: function () {
 		this._advanceToken();
-		var matched = this._getInput().match(_Lexer.rxNumberLiteral);
+		// parse token in a rough way
+		var matched = this._getInput().match(_Lexer.rxNumberLiteralRoughly);
 		if (matched == null)
 			return null;
+		var token = new Token(matched[0], false, this._filename, this._lineNumber, this._getColumn());
+		// parse token in a strict way
+		var rough = matched[0];
+		var matched = rough.match(_Lexer.rxNumberLiteral);
+		if (matched == null || matched[0] !== rough) {
+			this._errors.push(new CompileError(token, "expected number literal"));
+			return null;
+		}
 		this._tokenLength = matched[0].length;
-		return new Token(matched[0], false, this._filename, this._lineNumber, this._getColumn());
+		return token;
 	},
 
 	_expectRegExpLiteralOpt: function () {
