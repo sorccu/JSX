@@ -60,6 +60,10 @@ var NodePlatform = Platform.extend({
 		}
 	},
 
+	chmod: function (name, mode) {
+		return fs.chmodSync(name, mode);
+	},
+
 	getFilesInDirectory: function (path) {
 		return fs.readdirSync(path);
 	},
@@ -203,6 +207,11 @@ var CompilationPlatform = NodePlatform.extend({
 		this._statusCode = -1;
 	},
 
+	chmod: function (name, mode) {
+		// noop
+		return true;
+	},
+
 	save: function (outputFile, content) {
 		if (outputFile == null) {
 			this._stdout += content;
@@ -287,6 +296,7 @@ var CompilationServer = Class.extend({
 				c.setStatusCode(Main.run(c, args));
 			}
 			catch (e) {
+				console.error("%s#s %s", startTime, id, e.stack);
 				c.error(e.toString());
 			}
 
@@ -673,7 +683,7 @@ var Main = Class.extend({
 					emitter.saveSourceMappingFile(platform);
 
 					if (executable === "node") {
-						fs.chmodSync(outputFile, "0755");
+						platform.chmod(outputFile, "0755");
 					}
 				}
 

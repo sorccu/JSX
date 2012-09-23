@@ -49,9 +49,15 @@ sub jsx {
             'Content-Type' => 'application/json',,
             'Content'      => JSON::encode_json(\@_),
         );
-        my $result = JSON::decode_json($res->content);
-        $? = $result->{statusCode};
-        return $result->{stdout};
+        if ($res->is_success) {
+            my $result = JSON::decode_json($res->content);
+            $? = $result->{statusCode};
+            return $result->{stdout} . $result->{stderr};
+        }
+        else {
+            $? = 1;
+            return undef;
+        }
     }
 }
 sub slurp {

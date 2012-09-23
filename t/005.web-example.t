@@ -3,21 +3,19 @@ use strict;
 use warnings;
 use Test::More;
 
+use t::util::Util;
+
 my @files = <web/example/*.jsx>;
 plan tests => 2 * scalar @files;
 
 for my $file(@files) {
     {
-        my $cmd = qq{bin/jsx "$file"};
-        `$cmd`; # ensure it compiles
-
-        is $?, 0, $cmd;
+        jsx($file);
+        is $?, 0, "jsx $file";
     }
     {
-        my $cmd = qq{bin/jsx --mode parse "$file"};
-        `$cmd`; # ensure it compiles
-
-        is $?, 0, $cmd;
+        jsx("--mode", "parse", $file);
+        is $?, 0, "jsx -- mode parse";
     }
 }
 
