@@ -1,5 +1,3 @@
-#!/usr/bin/env node
-
 /*
  * Copyright (c) 2012 DeNA Co., Ltd.
  *
@@ -22,186 +20,31 @@
  * IN THE SOFTWARE.
  */
 
-var fs = require("fs");
-var path = require("path");
+import "./meta.jsx";
+import "./compiler.jsx";
+import "./completion.jsx";
+import "./doc.jsx";
+import "./platform.jsx";
+import "./emitter.jsx";
+import "./jsemitter.jsx";
+import "./optimizer.jsx";
+import "./util.jsx";
 
-var Class = require("../src/Class");
-eval(Class.$import("../src/compiler"));
-eval(Class.$import("../src/completion"));
-eval(Class.$import("../src/doc"));
-eval(Class.$import("../src/platform"));
-eval(Class.$import("../src/jsemitter"));
-eval(Class.$import("../src/optimizer"));
-eval(Class.$import("../src/util"));
+import "js.jsx";
+import "js/nodejs.jsx";
 
-"use strict";
 
-var NodePlatform = Platform.extend({
-	constructor: function() {
-		var root = path.dirname(__dirname);
-		this._root = root.replace(/\\/g, "/");
-		this._virtualFile = Object.create(null);
-	},
+class JSXCommand {
 
-	getRoot: function () {
-		return this._root;
-	},
-
-	fileExists: function (name) {
-		name = path.normalize(name);
-		if (name in this._virtualFile) {
-			return true;
-		}
-		try {
-			fs.statSync(name);
-			return true;
-		} catch (e) {
-			return false;
-		}
-	},
-
-	getFilesInDirectory: function (path) {
-		return fs.readdirSync(path);
-	},
-
-	setFileContent: function (name, content) {
-		this._virtualFile[name] = content;
-	},
-
-	load: function (name) {
-		name = path.normalize(name);
-		if (name in this._virtualFile) {
-			return this._virtualFile[name];
-		}
-		else if (name === "-") {
-			var fd = process.stdin.fd;
-
-			var content = "";
-			var BUFFER_SIZE = 4096;
-			var buffer = new Buffer(BUFFER_SIZE);
-			var n;
-
-			while( (n = fs.readSync(fd, buffer, 0, BUFFER_SIZE)) > 0) {
-				content += buffer.slice(0, n).toString();
-			}
-			return content;
-		}
-		else {
-			return fs.readFileSync(name).toString();
-		}
-	},
-
-	save: function (outputFile, content) {
-		if (outputFile == null) {
-			process.stdout.write(content);
-		}
-		else {
-			fs.writeFileSync(outputFile, content);
-		}
-	},
-
-	mkpath: function (path) {
-		try {
-			fs.statSync(path);
-		} catch (e) {
-			var dirOfPath = path.replace(/\/[^/]*$/, "");
-			if (dirOfPath != path) {
-				this.mkpath(dirOfPath);
-			}
-			fs.mkdirSync(path);
-		}
-	},
-
-	// called from JavaScriptEmitter
-	addLauncher: function (emitter, sourceFile, targetCode, entryPoint, executableFor) {
-		if(emitter instanceof JavaScriptEmitter) {
-			targetCode += this.load(this.getRoot() + "/src/js/launcher.js");
-
-			var args =
-				( executableFor === "node"     ? "process.argv.slice(2)"
-				: executableFor === "commonjs" ? "require('system').args.slice(1)"
-				: "[]" );
-			switch(entryPoint) {
-			case "_Main":
-				launcher = "runMain";
-				break;
-			case "_Test":
-				launcher = "runTests";
-				break;
-			default:
-				throw new Error("Unknown entry point type: " +
-								entryPoint);
-			}
-			var callEntryPoint = Util.format("JSX.%1(%2, %3)",
-					[launcher, JSON.stringify(sourceFile), args]);
-
-			if (executableFor === "web") {
-				callEntryPoint = this.wrapOnLoad(callEntryPoint);
-			}
-
-			return targetCode + callEntryPoint + "\n";
-		}
-		else {
-			throw new Error("FIXME");
-		}
-	},
-
-	wrapOnLoad: function (code) {
-		var wrapper = this.load(this.getRoot() + "/src/js/web-launcher.js");
-		return wrapper.replace(/\/\/--CODE--\/\//, code);
-	}
-});
-
-var JSX = Class.extend({
-	$_meta: null,
-
-	$meta: function (name) {
-		if (JSX._meta === null) {
-			var j = fs.readFileSync( __dirname + "/../package.json" );
-			JSX._meta = JSON.parse(j);
-		}
-		return JSX._meta[name];
-	},
-
-	$execNodeJS: function (scriptFile, script, args) {
-		var tmpdir = process.env.TMPDIR || process.env.TMP || "/tmp";
-		var jsFile = Util.format("%1/%2.%3.%4.js", [
-			tmpdir,
-			path.basename(scriptFile || "-"),
-			process.pid.toString(),
-			Date.now().toString(16)
-		]);
-		fs.writeFileSync(jsFile, script);
-		process.on("exit", function() {
-			fs.unlinkSync(jsFile);
-		});
-
-		if (process.env.JSX_RUNJS) {
-			var child = require("child_process").spawn(process.env.JSX_RUNJS, [jsFile].concat(args));
-			child.stdin.end();
-			child.stdout.on("data", function (data) {
-				process.stdout.write(data);
-			});
-			child.stderr.on("data", function (data) {
-				process.stderr.write(data);
-			});
-		}
-		else {
-			process.argv = [process.argv[0], jsFile].concat(args);
-			require(jsFile); // evaluate it in this process
-		}
-	},
-
-	$printHelp: function () {
-		console.log(
-			"JSX compiler version " + JSX.meta("version") + "\n" +
+	static function help() : string {
+		return (
+			"JSX compiler version " + Meta.VERSION_STRING + "\n" +
 			"\n" +
 			"Usage: jsx [options] source-files\n" +
 			"\n" +
 			"Options:\n" +
 			"  --add-search-path path     add a path to library search paths\n" +
-			"  --executable RUNENV        add launcher to call _Main.main(:string[]):void\n" +
-			"                             supported RUNENV are node, commonjs and web\n" +
+			"  --executable (node|web)    add launcher to call _Main.main(:string[]):void\n" +
 			"  --run                      runs _Main.main(:string[]):void after compiling\n" +
 			"  --test                     runs _Test#test*():void after compiling\n" +
 			"  --output file              output file (default:stdout)\n" +
@@ -217,14 +60,11 @@ var JSX = Class.extend({
 			"  --version                  displays the version and exits\n" +
 			"  --help                     displays this help and exits\n" +
 			"");
-	},
+	}
 
-	$main: function (args) {
-
-		var platform = new NodePlatform();
-
+	static function main (platform : Platform, args : string[]) : number {
 		var argIndex = 0;
-		var getopt = function () {
+		var getopt = function () : Nullable.<string> {
 			if (args.length <= argIndex)
 				return null;
 			var arg = args[argIndex++];
@@ -237,9 +77,9 @@ var JSX = Class.extend({
 				return null;
 			}
 		};
-		var getoptarg = function () {
+		var getoptarg = function () : Nullable.<string> {
 			if (args.length <= argIndex) {
-				console.error("option " + args[argIndex - 1] + " requires a value");
+				platform.error("option " + args[argIndex - 1] + " requires a value");
 				return null;
 			}
 			return args[argIndex++];
@@ -247,16 +87,17 @@ var JSX = Class.extend({
 
 		var compiler = new Compiler(platform);
 
-		var tasks = [];
+		var tasks = new Array.<() -> void>;
 
-		var completionRequest = null;
-		var emitter = null;
-		var outputFile = null;
-		var inputFilename = null;
-		var executable = null;
-		var run = null;
+		var optimizer = null : Optimizer;
+		var completionRequest = null : CompletionRequest;
+		var emitter = null : Emitter;
+		var outputFile = null : Nullable.<string>;
+		var inputFilename = null : Nullable.<string>;
+		var executable = null : Nullable.<string>;
+		var run = null : Nullable.<string>;
 		var runImmediately = false;
-		var optimizeCommands = [];
+		var optimizeCommands = new string[];
 		var opt, optarg;
 		while ((opt = getopt()) != null) {
 		NEXTOPT:
@@ -292,7 +133,7 @@ var JSX = Class.extend({
 					compiler.setMode(Compiler.MODE_DOC);
 					break;
 				default:
-					console.error("unknown mode: " + optarg);
+					platform.error("unknown mode: " + optarg);
 					return 1;
 				}
 				break;
@@ -300,9 +141,9 @@ var JSX = Class.extend({
 				if ((optarg = getoptarg()) == null) {
 					return 1;
 				}
-				completionRequest = function () {
+				completionRequest = function () : CompletionRequest {
 					var a = optarg.split(/:/);
-					return new CompletionRequest(a[0], a[1] - 1);
+					return new CompletionRequest((a[0] as number), (a[1] as number) - 1);
 				}();
 				compiler.setMode(Compiler.MODE_COMPLETE);
 				break;
@@ -316,14 +157,13 @@ var JSX = Class.extend({
 					break;
 				case "c++":
 					throw new Error("FIXME");
-					break;
 				default:
-					console.error("unknown target: " + optarg);
+					platform.error("unknown target: " + optarg);
 					return 1;
 				}
 				break;
 			case "--release":
-				tasks.push(function () {
+				tasks.push(function () : void {
 					emitter.setEnableRunTimeTypeCheck(false);
 					optimizer.setEnableRunTimeTypeCheck(false);
 				});
@@ -342,17 +182,17 @@ var JSX = Class.extend({
 				optarg.split(",").forEach(function (type) {
 					switch (type) {
 					case "none":
-						compiler.getWarningFilters().unshift(function (warning) {
+						compiler.getWarningFilters().unshift(function (warning : CompileWarning) : Nullable.<boolean> {
 							return false;
 						});
 						break;
 					case "all":
-						compiler.getWarningFilters().unshift(function (warning) {
+						compiler.getWarningFilters().unshift(function (warning : CompileWarning) : Nullable.<boolean> {
 							return true;
 						});
 						break;
 					case "deprecated":
-						compiler.getWarningFilters().unshift(function (warning) {
+						compiler.getWarningFilters().unshift(function (warning : CompileWarning) : Nullable.<boolean> {
 							if (warning instanceof DeprecatedWarning) {
 								return true;
 							}
@@ -360,8 +200,7 @@ var JSX = Class.extend({
 						});
 						break;
 					default:
-						console.error("unknown warning type: " + type);
-						return 1;
+						platform.error("unknown warning type: " + type);
 					}
 				});
 				break;
@@ -370,18 +209,16 @@ var JSX = Class.extend({
 					return 1;
 				}
 				switch (optarg) {
-				case "web": // implies JavaScriptEmitter
+				case "web": // JavaScriptEmitter
 					break;
 				case "node": // implies JavaScriptEmitter
-					tasks.push(function () {
+					tasks.push(function () : void {
 						var shebang =  "#!" + process.execPath + "\n";
 						emitter.addHeader(shebang);
 					});
 					break;
-				case "commonjs": // implies JavaScriptEmitter
-					break;
 				default:
-					console.error("unknown executable type (node|web)");
+					platform.error("unknown executable type (node|web)");
 					return 1;
 				}
 				executable = optarg;
@@ -389,32 +226,32 @@ var JSX = Class.extend({
 				break;
 			case "--run":
 				run = "_Main";
-				executable = executable || "node";
+				executable = "node";
 				runImmediately = true;
 				break;
 			case "--test":
 				run = "_Test";
-				executable = executable || "node";
+				executable = "node";
 				runImmediately = true;
 				break;
 			case "--profile":
-				tasks.push(function () {
+				tasks.push(function () : void {
 					emitter.setEnableProfiler(true);
 				});
 				break;
 			case "--version":
-				console.log(JSX.meta("version"));
+				platform.log(Meta.VERSION_STRING);
 				return 0;
 			case "--help":
-				JSX.printHelp();
+				platform.log(JSXCommand.help());
 				return 0;
 			default:
-				var switchOpt = opt.match("^--(enable|disable)-(.*)$");
+				var switchOpt = opt.match(new RegExp("^--(enable|disable)-(.*)$"));
 				if (switchOpt != null) {
 					var mode = switchOpt[1] == "enable";
 					switch (switchOpt[2]) {
 					case "type-check":
-						tasks.push(function (mode) {
+						tasks.push(function (mode : boolean) : () -> void {
 							return function () {
 								emitter.setEnableRunTimeTypeCheck(mode);
 								optimizer.setEnableRunTimeTypeCheck(mode);
@@ -422,7 +259,7 @@ var JSX = Class.extend({
 						}(mode));
 						break NEXTOPT;
 					case "source-map":
-						tasks.push(function (mode) {
+						tasks.push(function (mode : boolean) : () -> void {
 							return function () {
 								emitter.setEnableSourceMap(mode);
 							};
@@ -432,13 +269,13 @@ var JSX = Class.extend({
 						break;
 					}
 				}
-				console.error("unknown option: " + opt);
+				platform.error("unknown option: " + opt);
 				return 1;
 			}
 		}
 
 		if (argIndex == args.length) {
-			console.error("no files");
+			platform.error("no files");
 			return 1;
 		}
 
@@ -452,12 +289,11 @@ var JSX = Class.extend({
 		switch (compiler.getMode()) {
 		case Compiler.MODE_PARSE:
 			if (compiler.compile()) {
-				platform.save(outputFile, compiler.getAST());
+				platform.save(outputFile, compiler.getAST() as string);
 				return 0;
 			} else {
 				return 1;
 			}
-			break;
 		}
 
 		if (emitter == null)
@@ -467,14 +303,14 @@ var JSX = Class.extend({
 		switch (compiler.getMode()) {
 		case Compiler.MODE_DOC:
 			if (outputFile == null) {
-				console.error("--output is mandatory for --mode doc");
+				platform.error("--output is mandatory for --mode doc");
 				return 1;
 			}
 			if (compiler.compile()) {
 				new DocumentGenerator(compiler)
 					.setOutputPath(outputFile)
 					.setPathFilter(function (sourcePath) {
-						return sourcePath.indexOf(platform.getRoot()) != 0;
+						return ! (sourcePath.match(/^(?:system:|\/)/) || sourcePath.match(/\/..\//));
 					})
 					.setTemplatePath(platform.getRoot() + "/src/doc/template.html")
 					.buildDoc();
@@ -484,10 +320,10 @@ var JSX = Class.extend({
 			}
 		}
 
-		var optimizer = new Optimizer();
+		optimizer = new Optimizer();
 		var err = optimizer.setup(optimizeCommands);
 		if (err != null) {
-			console.error(err);
+			platform.error(err);
 			return 0;
 		}
 
@@ -500,7 +336,7 @@ var JSX = Class.extend({
 		var result = compiler.compile();
 
 		if (completionRequest != null) {
-			process.stdout.write(JSON.stringify(completionRequest.getCandidates()));
+			platform.save(null, JSON.stringify(completionRequest.getCandidates()));
 			return 0;
 		}
 
@@ -516,14 +352,12 @@ var JSX = Class.extend({
 				if (outputFile != null) {
 					emitter.saveSourceMappingFile(platform);
 
-					if (executable === "node") {
-						fs.chmodSync(outputFile, "0755");
-					}
+					platform.makeFileExecutable(outputFile, "node");
 				}
 
 			}
 			else { // compile and run immediately
-				JSX.execNodeJS(sourceFile, output, args.slice(argIndex));
+				platform.execute(sourceFile, output, args.slice(argIndex));
 			}
 		}
 		else {
@@ -531,44 +365,8 @@ var JSX = Class.extend({
 		}
 		return 0;
 	}
-});
 
-function getEnvOpts() {
-	var opts = process.env["JSX_OPTS"];
-	if (! opts)
-		return [];
-	return opts.split(/\s+/);
 }
 
-var exitCode = JSX.main(getEnvOpts().concat(process.argv.slice(2)));
 
-// NOTE:
-// nodejs 0.8.0 on Windows doesn't flush stdout buffer before exitting.
-// use "drain" event for workaround
-// https://groups.google.com/forum/#!msg/nodejs/qXkr1C2c8vs/567P_mVZacsJ
-(function (exitCode) {
-	if (exitCode === 0) {
-		return;
-	}
-
-	var stdoutIsFlushed = process.stdout.write("");
-	var stderrIsFlushed = process.stderr.write("");
-
-	var exitIfFlushed = function () {
-		if (stdoutIsFlushed && stderrIsFlushed) {
-			process.exit(exitCode);
-		}
-	};
-
-	if (! stdoutIsFlushed) {
-		process.stdout.on('drain', exitIfFlushed);
-	}
-	if (! stderrIsFlushed) {
-		process.stderr.on('drain', exitIfFlushed);
-	}
-
-	exitIfFlushed();
-}(exitCode));
-
-// vim: set ft=javascript:
 // vim: set noexpandtab:

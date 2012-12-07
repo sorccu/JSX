@@ -1,9 +1,16 @@
+# temporary files
+
 *~
 *.swp
 *.zip
 _builtins.js
-try
-doc
 v8.log
 CodeMirror-*
 bootstrap/
+
+# products
+
+try/
+doc/
+bin/
+src/doc.jsx
