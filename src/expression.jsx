@@ -93,7 +93,11 @@ abstract class Expression implements Stashable {
 		return this._token;
 	}
 
-	abstract function analyze (context : AnalysisContext, parentExpr : Expression) : boolean;
+	final function analyze (context : AnalysisContext) : boolean {
+		return this.doAnalyze(context);
+	}
+
+	abstract function doAnalyze (context : AnalysisContext) : boolean;
 
 	abstract function getType () : Type;
 
@@ -194,14 +198,20 @@ class LocalExpression extends LeafExpression {
 
 	var _local : LocalVariable;
 	var _cloned : boolean;
+	var _isLHS : boolean;	// used in analyze
 
 	function constructor (token : Token, local : LocalVariable) {
+		this(token, local, false);
+	}
+
+	function constructor (token : Token, local : LocalVariable, isLHS : boolean) {
 		super(token);
 		this._local = local;
+		this._isLHS = isLHS;
 	}
 
 	override function clone () : LocalExpression {
-		var that = new LocalExpression(this._token, this._local);
+		var that = new LocalExpression(this._token, this._local, this._isLHS);
 		that._cloned = true;
 		return that;
 	}
@@ -214,25 +224,30 @@ class LocalExpression extends LeafExpression {
 		this._local = local;
 	}
 
+	function isLHS () : boolean {
+		return this._isLHS;
+	}
+
+	function setLHS (isLHS : boolean) : void {
+		this._isLHS = isLHS;
+	}
+
 	override function serialize () : variant {
 		return [
 			"LocalExpression",
 			this._token.serialize(),
-			this._local.serialize()
+			this._local.serialize(),
+			this._isLHS
 		] : variant[];
 	}
 
-	override function analyze (context : AnalysisContext, parentExpr : Expression) : boolean {
+	override function doAnalyze (context : AnalysisContext) : boolean {
 		// check that the variable is readable
-		if ((parentExpr instanceof AssignmentExpression
-		     && (parentExpr as AssignmentExpression).getFirstExpr() == this
-			&& (parentExpr as AssignmentExpression).getToken().getValue() == "=")
-			|| (parentExpr == null
-				&& context.statement instanceof ForInStatement
-				&& (context.statement as ForInStatement).getLHSExpr() == this)) {
-			// is LHS
+		if (this._isLHS) {
+			// nothing to do
 		} else {
-			this._local.touchVariable(context, this._token, false);
+			if (context.checkVariableStatus)
+				this._local.touchVariable(context, this._token, false);
 			if (this._local.getType() == null)
 				return false;
 		}
@@ -254,7 +269,8 @@ class LocalExpression extends LeafExpression {
 			context.errors.push(new CompileError(token, "cannot assign a value of type '" + type.toString() + "' to '" + this._local.getType().toString() + "'"));
 			return false;
 		}
-		this._local.touchVariable(context, this._token, true);
+		if (context.checkVariableStatus)
+			this._local.touchVariable(context, this._token, true);
 		return true;
 	}
 
@@ -281,7 +297,7 @@ class ClassExpression extends LeafExpression {
 		] : variant[];
 	}
 
-	override function analyze (context : AnalysisContext, parentExpr : Expression) : boolean {
+	override function doAnalyze (context : AnalysisContext) : boolean {
 		return true;
 	}
 
@@ -321,7 +337,7 @@ class NullExpression extends LeafExpression {
 		] : variant[];
 	}
 
-	override function analyze (context : AnalysisContext, parentExpr : Expression) : boolean {
+	override function doAnalyze (context : AnalysisContext) : boolean {
 		return true;
 	}
 
@@ -348,7 +364,7 @@ class BooleanLiteralExpression extends LeafExpression {
 		] : variant[];
 	}
 
-	override function analyze (context : AnalysisContext, parentExpr : Expression) : boolean {
+	override function doAnalyze (context : AnalysisContext) : boolean {
 		return true;
 	}
 
@@ -375,7 +391,7 @@ class IntegerLiteralExpression extends LeafExpression {
 		] : variant[];
 	}
 
-	override function analyze (context : AnalysisContext, parentExpr : Expression) : boolean {
+	override function doAnalyze (context : AnalysisContext) : boolean {
 		return true;
 	}
 
@@ -403,7 +419,7 @@ class NumberLiteralExpression extends LeafExpression {
 		] : variant[];
 	}
 
-	override function analyze (context : AnalysisContext, parentExpr : Expression) : boolean {
+	override function doAnalyze (context : AnalysisContext) : boolean {
 		return true;
 	}
 
@@ -430,7 +446,7 @@ class StringLiteralExpression extends LeafExpression {
 		] : variant[];
 	}
 
-	override function analyze (context : AnalysisContext, parentExpr : Expression) : boolean {
+	override function doAnalyze (context : AnalysisContext) : boolean {
 		return true;
 	}
 
@@ -464,7 +480,7 @@ class RegExpLiteralExpression extends LeafExpression {
 		] : variant[];
 	}
 
-	override function analyze (context : AnalysisContext, parentExpr : Expression) : boolean {
+	override function doAnalyze (context : AnalysisContext) : boolean {
 		var classDef = context.parser.lookup(context.errors, this._token, "RegExp");
 		if (classDef == null)
 			throw new Error("could not find definition for RegExp");
@@ -514,11 +530,11 @@ class ArrayLiteralExpression extends Expression {
 		] : variant[];
 	}
 
-	override function analyze (context : AnalysisContext, parentExpr : Expression) : boolean {
+	override function doAnalyze (context : AnalysisContext) : boolean {
 		// analyze all elements
 		var succeeded = true;
 		for (var i = 0; i < this._exprs.length; ++i) {
-			if (! this._exprs[i].analyze(context, this)) {
+			if (! this._exprs[i].analyze(context)) {
 				succeeded = false;
 			} else if (this._exprs[i].getType().equals(Type.voidType)) {
 				 // FIXME the location of the error would be strange; we deseparately need expr.getToken()
@@ -539,31 +555,25 @@ class ArrayLiteralExpression extends Expression {
 				context.errors.push(new CompileError(this._token, "the type specified after ':' is not an array type"));
 				return false;
 			}
-		} else {
+			// check type of the elements
+			var expectedType = (this._type.getClassDef() as InstantiatedClassDefinition).getTypeArguments()[0].toNullableType();
 			for (var i = 0; i < this._exprs.length; ++i) {
-				var elementType = this._exprs[i].getType().resolveIfNullable();
-				if (elementType.equals(Type.nullType)) {
-					// skip
-				} else {
-					if (elementType.equals(Type.integerType))
-						elementType = Type.numberType;
-					this._type = new ObjectType(Expression.instantiateTemplate(context, this._token, "Array", [ elementType ]));
-					break;
+				var elementType = this._exprs[i].getType();
+				if (! elementType.isConvertibleTo(expectedType)) {
+					context.errors.push(new CompileError(this._token, "cannot assign '" + elementType.toString() + "' to an array of '" + expectedType.toString() + "'"));
+					succeeded = false;
 				}
 			}
-			if (this._type == null) {
+		} else {
+			var elementType = Type.calcLeastCommonAncestor(this._exprs.map.<Type>((expr) -> { return expr.getType(); }), true);
+			if (elementType == null || elementType.equals(Type.nullType)) {
 				context.errors.push(new CompileError(this._token, "could not deduce array type, please specify"));
 				return false;
 			}
-		}
-		// check type of the elements
-		var expectedType = (this._type.getClassDef() as InstantiatedClassDefinition).getTypeArguments()[0].toNullableType();
-		for (var i = 0; i < this._exprs.length; ++i) {
-			var elementType = this._exprs[i].getType();
-			if (! elementType.isConvertibleTo(expectedType)) {
-				context.errors.push(new CompileError(this._token, "cannot assign '" + elementType.toString() + "' to an array of '" + expectedType.toString() + "'"));
-				succeeded = false;
-			}
+			if (elementType.equals(Type.integerType))
+				elementType = Type.numberType;
+			elementType = elementType.resolveIfNullable();
+			this._type = new ObjectType(Expression.instantiateTemplate(context, this._token, "Array", [ elementType ]));
 		}
 		return succeeded;
 	}
@@ -646,11 +656,14 @@ class MapLiteralExpression extends Expression {
 		] : variant[];
 	}
 
-	override function analyze (context : AnalysisContext, parentExpr : Expression) : boolean {
+	override function doAnalyze (context : AnalysisContext) : boolean {
+		// already analyzed
+		if (this._type != null && this._type instanceof ObjectType && (! this._type instanceof ParsedObjectType))
+			return true;
 		// analyze all elements
 		var succeeded = true;
 		for (var i = 0; i < this._elements.length; ++i) {
-			if (! this._elements[i].getExpr().analyze(context, this)) {
+			if (! this._elements[i].getExpr().analyze(context)) {
 				succeeded = false;
 			} else if (this._elements[i].getExpr().getType().equals(Type.voidType)) {
 				 // FIXME the location of the error would be strange; we deseparately need expr.getToken()
@@ -660,7 +673,6 @@ class MapLiteralExpression extends Expression {
 		}
 		if (! succeeded)
 			return false;
-		var expectedType = null : Type;
 		// determine the type from the array members if the type was not specified
 		if (this._type != null && this._type == Type.variantType) {
 			// pass
@@ -670,29 +682,8 @@ class MapLiteralExpression extends Expression {
 				context.errors.push(new CompileError(this._token, "specified type is not a hash type"));
 				return false;
 			}
-			expectedType = (this._type as ParsedObjectType).getTypeArguments()[0];
-		} else if (this._type != null) {
-			context.errors.push(new CompileError(this._token, "invalid type for a map literal"));
-			return false;
-		} else {
-			for (var i = 0; i < this._elements.length; ++i) {
-				var elementType = this._elements[i].getExpr().getType();
-				if (! elementType.equals(Type.nullType)) {
-					if (elementType.equals(Type.integerType))
-						elementType = Type.numberType;
-					elementType = elementType.resolveIfNullable();
-					this._type = new ObjectType(Expression.instantiateTemplate(context, this._token, "Map", [ elementType ]));
-					expectedType = elementType;
-					break;
-				}
-			}
-			if (this._type == null) {
-				context.errors.push(new CompileError(this._token, "could not deduce hash type, please specify"));
-				return false;
-			}
-		}
-		// check type of the elements (expect when expectedType == null, meaning that it is a variant)
-		if (expectedType != null) {
+			var expectedType = (this._type as ParsedObjectType).getTypeArguments()[0];
+			// check type of the elements (expect when expectedType == null, meaning that it is a variant)
 			for (var i = 0; i < this._elements.length; ++i) {
 				var elementType = this._elements[i].getExpr().getType();
 				if (! elementType.isConvertibleTo(expectedType)) {
@@ -700,6 +691,19 @@ class MapLiteralExpression extends Expression {
 					succeeded = false;
 				}
 			}
+		} else if (this._type != null) {
+			context.errors.push(new CompileError(this._token, "invalid type for a map literal"));
+			return false;
+		} else {
+			var elementType = Type.calcLeastCommonAncestor(this._elements.map.<Type>((elt) -> { return elt.getExpr().getType(); }), true);
+			if (elementType == null || elementType.equals(Type.nullType)) {
+				context.errors.push(new CompileError(this._token, "could not deduce hash type, please specify"));
+				return false;
+			}
+			if (elementType.equals(Type.integerType))
+				elementType = Type.numberType;
+			elementType = elementType.resolveIfNullable();
+			this._type = new ObjectType(Expression.instantiateTemplate(context, this._token, "Map", [ elementType ]));
 		}
 		return succeeded;
 	}
@@ -740,7 +744,7 @@ class ThisExpression extends Expression {
 		] : variant[];
 	}
 
-	override function analyze (context : AnalysisContext, parentExpr : Expression) : boolean {
+	override function doAnalyze (context : AnalysisContext) : boolean {
 		var rootFuncDef = context.funcDef;
 		if (rootFuncDef != null)
 			while (rootFuncDef.getParent() != null)
@@ -792,7 +796,7 @@ class FunctionExpression extends Expression {
 		] : variant[];
 	}
 
-	override function analyze (context : AnalysisContext, parentExpr : Expression) : boolean {
+	override function doAnalyze (context : AnalysisContext) : boolean {
 		if (! this.typesAreIdentified()) {
 			context.errors.push(new CompileError(this._token, "argument / return types were not automatically deductable, please specify them by hand"));
 			return false;
@@ -850,7 +854,7 @@ abstract class UnaryExpression extends OperatorExpression {
 	}
 
 	function _analyze (context : AnalysisContext) : boolean {
-		if (! this._expr.analyze(context, this))
+		if (! this._expr.analyze(context))
 			return false;
 		if (this._expr.getType().equals(Type.voidType)) {
 			context.errors.push(new CompileError(this._token, "cannot apply operator '" + this._token.getValue() + "' against void"));
@@ -875,7 +879,7 @@ class BitwiseNotExpression extends UnaryExpression {
 		return new BitwiseNotExpression(this._token, this._expr.clone());
 	}
 
-	override function analyze (context : AnalysisContext, parentExpr : Expression) : boolean {
+	override function doAnalyze (context : AnalysisContext) : boolean {
 		if (! this._analyze(context))
 			return false;
 		if (! this.assertIsConvertibleTo(context, this._expr, Type.numberType, false))
@@ -914,7 +918,7 @@ class InstanceofExpression extends UnaryExpression {
 		] : variant[];
 	}
 
-	override function analyze (context : AnalysisContext, parentExpr : Expression) : boolean {
+	override function doAnalyze (context : AnalysisContext) : boolean {
 		if (! this._analyze(context))
 			return false;
 		var exprType = this._expr.getType();
@@ -954,7 +958,7 @@ class AsExpression extends UnaryExpression {
 		] : variant[];
 	}
 
-	override function analyze (context : AnalysisContext, parentExpr : Expression) : boolean {
+	override function doAnalyze (context : AnalysisContext) : boolean {
 		if (! this._analyze(context))
 			return false;
 		if (this._type instanceof NullableType) {
@@ -1033,7 +1037,7 @@ class AsNoConvertExpression extends UnaryExpression {
 		] : variant[];
 	}
 
-	override function analyze (context : AnalysisContext, parentExpr : Expression) : boolean {
+	override function doAnalyze (context : AnalysisContext) : boolean {
 		if (! this._analyze(context))
 			return false;
 		var srcType = this._expr.getType();
@@ -1064,7 +1068,7 @@ class LogicalNotExpression extends UnaryExpression {
 		return new LogicalNotExpression(this._token, this._expr.clone());
 	}
 
-	override function analyze (context : AnalysisContext, parentExpr : Expression) : boolean {
+	override function doAnalyze (context : AnalysisContext) : boolean {
 		if (! this._analyze(context))
 			return false;
 		if (this._expr.getType().resolveIfNullable().equals(Type.voidType)) {
@@ -1094,7 +1098,7 @@ abstract class IncrementExpression extends UnaryExpression {
 		] : variant[];
 	}
 
-	override function analyze (context : AnalysisContext, parentExpr : Expression) : boolean {
+	override function doAnalyze (context : AnalysisContext) : boolean {
 		if (! this._analyze(context))
 			return false;
 		var exprType = this._expr.getType();
@@ -1187,7 +1191,7 @@ class PropertyExpression extends UnaryExpression {
 		] : variant[];
 	}
 
-	override function analyze (context : AnalysisContext, parentExpr : Expression) : boolean {
+	override function doAnalyze (context : AnalysisContext) : boolean {
 		// normal handling
 		if (! this._analyze(context))
 			return false;
@@ -1290,7 +1294,7 @@ class TypeofExpression extends UnaryExpression {
 		return new TypeofExpression(this._token, this._expr.clone());
 	}
 
-	override function analyze (context : AnalysisContext, parentExpr : Expression) : boolean {
+	override function doAnalyze (context : AnalysisContext) : boolean {
 		if (! this._analyze(context))
 			return false;
 		var exprType = this._expr.getType();
@@ -1317,7 +1321,7 @@ class SignExpression extends UnaryExpression {
 		return new SignExpression(this._token, this._expr.clone());
 	}
 
-	override function analyze (context : AnalysisContext, parentExpr : Expression) : boolean {
+	override function doAnalyze (context : AnalysisContext) : boolean {
 		if (! this._analyze(context))
 			return false;
 		if (! this.assertIsConvertibleTo(context, this._expr, Type.numberType, true))
@@ -1375,9 +1379,9 @@ abstract class BinaryExpression extends OperatorExpression {
 	}
 
 	function _analyze (context : AnalysisContext) : boolean {
-		if (! this._expr1.analyze(context, this))
+		if (! this._expr1.analyze(context))
 			return false;
-		if (! this._expr2.analyze(context, this))
+		if (! this._expr2.analyze(context))
 			return false;
 		return true;
 	}
@@ -1407,7 +1411,7 @@ class AdditiveExpression extends BinaryExpression {
 		return ret;
 	}
 
-	override function analyze (context : AnalysisContext, parentExpr : Expression) : boolean {
+	override function doAnalyze (context : AnalysisContext) : boolean {
 		if (! this._analyze(context))
 			return false;
 		var expr1Type = this._expr1.getType().resolveIfNullable();
@@ -1448,7 +1452,7 @@ class ArrayExpression extends BinaryExpression {
 		return ret;
 	}
 
-	override function analyze (context : AnalysisContext, parentExpr : Expression) : boolean {
+	override function doAnalyze (context : AnalysisContext) : boolean {
 		if (! this._analyze(context))
 			return false;
 		if (this._expr1.getType() == null) {
@@ -1514,10 +1518,10 @@ class AssignmentExpression extends BinaryExpression {
 		return new AssignmentExpression(this._token, this._expr1.clone(), this._expr2.clone());
 	}
 
-	override function analyze (context : AnalysisContext, parentExpr : Expression) : boolean {
+	override function doAnalyze (context : AnalysisContext) : boolean {
 		// special handling for v = function () ...
 		if (this._expr2 instanceof FunctionExpression)
-			return this._analyzeFunctionExpressionAssignment(context, parentExpr);
+			return this._analyzeFunctionExpressionAssignment(context);
 		// normal handling
 		if (! this._analyze(context))
 			return false;
@@ -1576,9 +1580,9 @@ class AssignmentExpression extends BinaryExpression {
 		return false;
 	}
 
-	function _analyzeFunctionExpressionAssignment (context : AnalysisContext, parentExpr : Expression) : boolean {
+	function _analyzeFunctionExpressionAssignment (context : AnalysisContext) : boolean {
 		// analyze from left to right to avoid "variable may not be defined" error in case the function calls itself
-		if (! this._expr1.analyze(context, this))
+		if (! this._expr1.analyze(context))
 			return false;
 		if (this._expr1.getType() == null) {
 			if (! (this._expr2 as FunctionExpression).typesAreIdentified()) {
@@ -1591,7 +1595,7 @@ class AssignmentExpression extends BinaryExpression {
 		}
 		if (! this._expr1.assertIsAssignable(context, this._token, this._expr2.getType()))
 			return false;
-		if (! this._expr2.analyze(context, this))
+		if (! this._expr2.analyze(context))
 			return false;
 		return true;
 	}
@@ -1613,7 +1617,7 @@ class BinaryNumberExpression extends BinaryExpression {
 		return new BinaryNumberExpression(this._token, this._expr1.clone(), this._expr2.clone());
 	}
 
-	override function analyze (context : AnalysisContext, parentExpr : Expression) : boolean {
+	override function doAnalyze (context : AnalysisContext) : boolean {
 		if (! this._analyze(context))
 			return false;
 		switch (this._token.getValue()) {
@@ -1678,7 +1682,7 @@ class EqualityExpression extends BinaryExpression {
 		return new EqualityExpression(this._token, this._expr1.clone(), this._expr2.clone());
 	}
 
-	override function analyze (context : AnalysisContext, parentExpr : Expression) : boolean {
+	override function doAnalyze (context : AnalysisContext) : boolean {
 		function bool (x : boolean) : number {
 			return x ? 1 : 0;
 		}
@@ -1717,7 +1721,7 @@ class InExpression extends BinaryExpression {
 		return new InExpression(this._token, this._expr1.clone(), this._expr2.clone());
 	}
 
-	override function analyze (context : AnalysisContext, parentExpr : Expression) : boolean {
+	override function doAnalyze (context : AnalysisContext) : boolean {
 		if (! this._analyze(context))
 			return false;
 		if (! this._expr1.getType().resolveIfNullable().equals(Type.stringType)) {
@@ -1753,7 +1757,7 @@ class LogicalExpression extends BinaryExpression {
 		return new LogicalExpression(this._token, this._expr1.clone(), this._expr2.clone());
 	}
 
-	override function analyze (context : AnalysisContext, parentExpr : Expression) : boolean {
+	override function doAnalyze (context : AnalysisContext) : boolean {
 		if (! this._analyze(context))
 			return false;
 		if (this._expr1.getType().resolveIfNullable().equals(Type.voidType)) {
@@ -1783,7 +1787,7 @@ class ShiftExpression extends BinaryExpression {
 		return new ShiftExpression(this._token, this._expr1.clone(), this._expr2.clone());
 	}
 
-	override function analyze (context : AnalysisContext, parentExpr : Expression) : boolean {
+	override function doAnalyze (context : AnalysisContext) : boolean {
 		if (! this._analyze(context))
 			return false;
 		if (! this.assertIsConvertibleTo(context, this._expr1, Type.integerType, true))
@@ -1850,13 +1854,13 @@ class ConditionalExpression extends OperatorExpression {
 		] : variant[];
 	}
 
-	override function analyze (context : AnalysisContext, parentExpr : Expression) : boolean {
+	override function doAnalyze (context : AnalysisContext) : boolean {
 		// analyze the three expressions
-		if (! this._condExpr.analyze(context, this))
+		if (! this._condExpr.analyze(context))
 			return false;
-		if (this._ifTrueExpr != null && ! this._ifTrueExpr.analyze(context, this))
+		if (this._ifTrueExpr != null && ! this._ifTrueExpr.analyze(context))
 			return false;
-		if (! this._ifFalseExpr.analyze(context, this))
+		if (! this._ifFalseExpr.analyze(context))
 			return false;
 		// check the types
 		if (this._condExpr.getType().equals(Type.voidType)) {
@@ -1938,8 +1942,8 @@ class CallExpression extends OperatorExpression {
 		] : variant[];
 	}
 
-	override function analyze (context : AnalysisContext, parentExpr : Expression) : boolean {
-		if (! this._expr.analyze(context, this))
+	override function doAnalyze (context : AnalysisContext) : boolean {
+		if (! this._expr.analyze(context))
 			return false;
 		var exprType = this._expr.getType().resolveIfNullable();
 		if (! (exprType instanceof FunctionType)) {
@@ -1947,7 +1951,7 @@ class CallExpression extends OperatorExpression {
 			return false;
 		}
 		var argTypes = Util.analyzeArgs(
-			context, this._args, this,
+			context, this._args,
 			(exprType as FunctionType).getExpectedCallbackTypes(
 				this._args.length,
 				! (this._expr instanceof PropertyExpression && ! exprType.isAssignable() && ! ((this._expr as PropertyExpression).getExpr() instanceof ClassExpression))));
@@ -2032,7 +2036,7 @@ class SuperExpression extends OperatorExpression {
 		] : variant[];
 	}
 
-	override function analyze (context : AnalysisContext, parentExpr : Expression) : boolean {
+	override function doAnalyze (context : AnalysisContext) : boolean {
 		// obtain class definition
 		if ((context.funcDef.flags() & ClassDefinition.IS_STATIC) != 0) {
 			context.errors.push(new CompileError(this._token, "cannot use 'super' keyword in a static function"));
@@ -2047,7 +2051,7 @@ class SuperExpression extends OperatorExpression {
 		}
 		// analyze args
 		var argTypes = Util.analyzeArgs(
-			context, this._args, this,
+			context, this._args,
 			funcType.getExpectedCallbackTypes(this._args.length, false));
 		if (argTypes == null)
 			return false;
@@ -2112,7 +2116,7 @@ class NewExpression extends OperatorExpression {
 		] : variant[];
 	}
 
-	override function analyze (context : AnalysisContext, parentExpr : Expression) : boolean {
+	override function doAnalyze (context : AnalysisContext) : boolean {
 		// for instantiated code, check is necessary at this moment
 		if (! (this._type instanceof ObjectType)) {
 			context.errors.push(new CompileError(this._token, "cannot instantiate a non-object type: " + this._type.toString()));
@@ -2136,7 +2140,7 @@ class NewExpression extends OperatorExpression {
 			return false;
 		}
 		var argTypes = Util.analyzeArgs(
-			context, this._args, this,
+			context, this._args,
 			ctors.getExpectedCallbackTypes(this._args.length, false));
 		if (argTypes == null)
 			return false;
@@ -2200,9 +2204,9 @@ class CommaExpression extends Expression {
 		] : variant[];
 	}
 
-	override function analyze (context : AnalysisContext, parentExpr : Expression) : boolean {
-		return this._expr1.analyze(context, this)
-			&& this._expr2.analyze(context, this);
+	override function doAnalyze (context : AnalysisContext) : boolean {
+		return this._expr1.analyze(context)
+			&& this._expr2.analyze(context);
 	}
 
 	override function getType () : Type {

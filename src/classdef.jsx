@@ -84,12 +84,13 @@ class AnalysisContext {
 	var postInstantiationCallback : function(:Parser,:ClassDefinition):ClassDefinition;
 	var funcDef : MemberFunctionDefinition;
 	var blockStack : BlockContext[];
-	var statement : Statement;
+	var checkVariableStatus : boolean;
 
 	function constructor (errors : CompileError[], parser : Parser, postInstantiationCallback : function(:Parser,:ClassDefinition):ClassDefinition) {
 		this.errors = errors;
 		this.parser = parser;
 		this.postInstantiationCallback = postInstantiationCallback;
+		this.checkVariableStatus = false;
 		this.funcDef = null;
 		/*
 			blockStack is a stack of blocks:
@@ -110,12 +111,16 @@ class AnalysisContext {
 			}
 		*/
 		this.blockStack = null;
-		this.statement = null;
 	}
 
 	function clone () : Object {
 		// NOTE: does not clone the blockStack (call setBlockStack)
-		return new AnalysisContext(this.errors, this.parser, this.postInstantiationCallback).setFuncDef(this.funcDef);
+		return new AnalysisContext(this.errors, this.parser, this.postInstantiationCallback).setFuncDef(this.funcDef).setCheckVariableStatus(this.checkVariableStatus);
+	}
+
+	function setCheckVariableStatus (checkVariableStatus : boolean) : AnalysisContext {
+		this.checkVariableStatus = checkVariableStatus;
+		return this;
 	}
 
 	function setFuncDef (funcDef : MemberFunctionDefinition) : AnalysisContext {
@@ -928,7 +933,7 @@ class MemberVariableDefinition extends MemberDefinition {
 			try {
 				this._analyzeState = MemberVariableDefinition.IS_ANALYZING;
 				if (this._initialValue != null) {
-					if (! this._initialValue.analyze(this._analysisContext, null))
+					if (! this._initialValue.analyze(this._analysisContext))
 						return null;
 					var ivType = this._initialValue.getType();
 					if (this._type == null) {
@@ -1149,9 +1154,74 @@ class MemberFunctionDefinition extends MemberDefinition implements Block {
 			context.blockStack.push(new BlockContext(new LocalVariableStatuses(this, outerContext.getTopBlock().localVariableStatuses), this));
 		}
 
+		// push assignments to local variables
+		Util.forEachStatement(function onStatement(statement : Statement) : boolean {
+			if (statement instanceof ForInStatement
+			    && (statement as ForInStatement).getLHSExpr() instanceof LocalExpression) {
+				var forInStmt = statement as ForInStatement;
+				var local = forInStmt.getLHSExpr() as LocalExpression;
+				local.setLHS(true);
+				local.getLocal().registerListExpr(forInStmt.getListExpr());
+			}
+			statement.forEachExpression(function onExpr(expr : Expression) : boolean {
+				if (expr instanceof AssignmentExpression
+					&& (expr as AssignmentExpression).getFirstExpr() instanceof LocalExpression
+					&& (expr as AssignmentExpression).getToken().getValue() == '=') {
+						var assignExpr = expr as AssignmentExpression;
+						var local = assignExpr.getFirstExpr() as LocalExpression;
+						local.setLHS(true);
+						if (! (assignExpr.getSecondExpr() instanceof FunctionExpression)) {
+							local.getLocal().registerRHSExpr(assignExpr.getSecondExpr());
+						}
+				}
+				expr.forEachExpression(onExpr);
+				return true;
+			});
+			statement.forEachStatement(onStatement);
+			return true;
+		}, this._statements);
+
+		// infer types of local variables
+		// TODO occur check, local functions
+		context.setCheckVariableStatus(false);
+		this._locals.forEach(function (local) {
+			if (local.getType() == null) {
+				var commonType = null : Type;
+				var rhsExprTypes = local.getRHSExprs().map.<Type>((expr) -> {
+					expr.analyze(context);
+					return expr.getType();
+				});
+				var succ = true;
+				var listExprTypes = local.getListExprs().map.<Type>((expr) -> {
+					var listTypeName = '';
+					expr.analyze(context);
+					if (expr.getType() instanceof ObjectType
+						&& (expr.getType().getClassDef() instanceof InstantiatedClassDefinition)
+						&& ((listTypeName = (expr.getType().getClassDef() as InstantiatedClassDefinition).getTemplateClassName()) == 'Array'
+							|| listTypeName == 'Map')) {
+						return listTypeName == 'Array' ? Type.numberType : Type.stringType;
+					}
+					succ = false;
+					return null;
+				});
+				var types : Type[] = rhsExprTypes.concat(listExprTypes).filter.<Type>((t) -> { return t != null; });
+				if (succ == false || types.length == 0) {
+					//context.errors.push(new CompileError(local.getName(), 'could not deduce the type of variable ' + local.getName().getValue()));
+					return;
+				}
+				var type = Type.calcLeastCommonAncestor(types);
+				if (type == null) {
+					//context.errors.push(new CompileError(local.getName(), 'error while deducing variable type ' + local.getName().getValue()));
+					return;
+				}
+				local.setType(type);
+			}
+		});
+
 		try {
 
 			// do the checks
+			context.setCheckVariableStatus(true);
 			for (var i = 0; i < this._statements.length; ++i)
 				if (! this._statements[i].analyze(context))
 					break;
@@ -1485,12 +1555,16 @@ class LocalVariable {
 	var _name : Token;
 	var _type : Type;
 	var _instantiated : LocalVariable[];
+	var _rhsExprs : Expression[];
+	var _listExprs : Expression[];
 	var isInstantiated = false;
 
 	function constructor (name : Token, type : Type) {
 		this._name = name;
 		this._type = type;
 		this._instantiated = new LocalVariable[];
+		this._rhsExprs = new Expression[];
+		this._listExprs = new Expression[];
 	}
 
 	function serialize () : variant {
@@ -1519,6 +1593,22 @@ class LocalVariable {
 
 	function setTypeForced (type : Type) : void {
 		this._type = type;
+	}
+
+	function getRHSExprs () : Expression[] {
+		return this._rhsExprs;
+	}
+
+	function registerRHSExpr (expr : Expression) : void {
+		this._rhsExprs.push(expr);
+	}
+
+	function getListExprs () : Expression[] {
+		return this._listExprs;
+	}
+
+	function registerListExpr (expr : Expression) : void {
+		this._listExprs.push(expr);
 	}
 
 	function touchVariable (context : AnalysisContext, token : Token, isAssignment : boolean) : boolean {

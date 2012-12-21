@@ -1,16 +1,16 @@
 /*
  * Copyright (c) 2012 DeNA Co., Ltd.
- * 
+ *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to
  * deal in the Software without restriction, including without limitation the
  * rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
  * sell copies of the Software, and to permit persons to whom the Software is
  * furnished to do so, subject to the following conditions:
- * 
+ *
  * The above copyright notice and this permission notice shall be included in
  * all copies or substantial portions of the Software.
- * 
+ *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -83,7 +83,7 @@ class Token {
 }
 
 class _Lexer {
-	
+
 	static var ident         = " [a-zA-Z_] [a-zA-Z0-9_]* ";
 	static var doubleQuoted  = ' "  [^"\\\\]* (?: \\\\. [^"\\\\]* )* " ';
 	static var singleQuoted  = " '  [^'\\\\]* (?: \\\\. [^'\\\\]* )* ' ";
@@ -124,16 +124,19 @@ class _Lexer {
 		"break",    "do",       "instanceof", "typeof",
 		"case",     "else",     "new",        "var",
 		"catch",    "finally",  "return",     "void",
-		"continue", "for",      "switch",     "while",
+		/*"continue",*/ // contextual
+		"for",      "switch",     "while",
 		"function", "this",
 		/* "default", */ // contextual keywords
 		"if",       "throw",
 		/* "assert",    "log", // contextual keywords */
-		"delete",   "in",       "try",
+		/*"delete",*/ // contextual
+		"in",       "try",
 		// keywords of JSX
 		"class",	 "extends", "super",
 		"import",    "implements",
-		"interface", "static",
+		// "interface", // contextual keywords
+		"static",
 		"__FILE__",  "__LINE__",
 		"undefined"
 		]);
@@ -412,7 +415,7 @@ class QualifiedName {
 
 	function getClass (context : AnalysisContext, typeArguments : Type[]) : ClassDefinition {
 		var classDef = null : ClassDefinition;
-		
+
 		if (this._import != null) {
 			if (typeArguments.length == 0) {
 				var classDefs = this._import.getClasses(this._token.getValue());
@@ -521,7 +524,7 @@ class Scope {
 		this.statements = statements;
 		this.closures = closures;
 	}
-	
+
 }
 
 class Parser {
@@ -1588,7 +1591,7 @@ class Parser {
 					return null;
 				}
 			}
-			function createDefinition(locals : LocalVariable[], statements : Statement[], closures : MemberFunctionDefinition[], lastToken : Token) : MemberFunctionDefinition { 
+			function createDefinition(locals : LocalVariable[], statements : Statement[], closures : MemberFunctionDefinition[], lastToken : Token) : MemberFunctionDefinition {
 				return typeArgs.length != 0
 					? new TemplateFunctionDefinition(token, name, flags, typeArgs, returnType, args, locals, statements, closures, lastToken, docComment) as MemberFunctionDefinition
 					: new MemberFunctionDefinition(token, name, flags, returnType, args, locals, statements, closures, lastToken, docComment);
@@ -2389,10 +2392,10 @@ class Parser {
 		if ((assignToken = this._expectOpt("=")) != null)
 			if ((initialValue = this._assignExpr(noIn)) == null)
 				return null;
-		var expr : Expression = new LocalExpression(identifier, local);
 		if (initialValue != null)
-			expr = new AssignmentExpression(assignToken, expr, initialValue);
-		return expr;
+			return new AssignmentExpression(assignToken, new LocalExpression(identifier, local, true), initialValue);
+		else
+			return new LocalExpression(identifier, local, false);
 	}
 
 	function _expr () : Expression {
@@ -2827,7 +2830,7 @@ class Parser {
 		var funcExpr = new FunctionExpression(token, funcDef);
 		if (name != null) {
 			// conversion from function statement to assignment expression
-			var localExpr = new LocalExpression(name, local);
+			var localExpr = new LocalExpression(name, local, true);
 			return new AssignmentExpression(new Token("=", true, token._filename, token._lineNumber, token._columnNumber), localExpr, funcExpr);
 		} else {
 			return funcExpr;
@@ -2902,7 +2905,7 @@ class Parser {
 		} else if ((token = this._expectIdentifierOpt(function (self) { return self._getCompletionCandidatesWithLocal(); })) != null) {
 			var local = this._findLocal(token.getValue());
 			if (local != null) {
-				return new LocalExpression(token, local);
+				return new LocalExpression(token, local, false);
 			} else {
 				var parsedType = this._objectTypeDeclaration(token, null);
 				if (parsedType == null)
