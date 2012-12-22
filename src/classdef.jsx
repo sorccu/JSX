@@ -1186,11 +1186,13 @@ class MemberFunctionDefinition extends MemberDefinition implements Block {
 		context.setCheckVariableStatus(false);
 		this._locals.forEach(function (local) {
 			if (local.getType() == null) {
-				var commonType = null : Type;
 				var rhsExprTypes = local.getRHSExprs().map.<Type>((expr) -> {
 					expr.analyze(context);
 					return expr.getType();
 				});
+				if (local.getType() != null) {
+					return;
+				}
 				var succ = true;
 				var listExprTypes = local.getListExprs().map.<Type>((expr) -> {
 					var listTypeName = '';
