@@ -1183,6 +1183,7 @@ class MemberFunctionDefinition extends MemberDefinition implements Block {
 
 		// infer types of local variables
 		// TODO occur check, local functions
+		/* XXX: temporarily disable 14b1ae599ee01f6a80927efb9b068d03e08c210d
 		context.setCheckVariableStatus(false);
 		this._locals.forEach(function (local) {
 			if (local.getType() == null) {
@@ -1219,6 +1220,7 @@ class MemberFunctionDefinition extends MemberDefinition implements Block {
 				local.setType(type);
 			}
 		});
+		*/
 
 		try {
 
@@ -1613,6 +1615,11 @@ class LocalVariable {
 		this._listExprs.push(expr);
 	}
 
+	/*
+	 * If isAssignment is true, this method turns on ISSET flag to
+	 * the local variable status. Otherwise it checks whether the local
+	 * variable status is ISSET.
+	 */
 	function touchVariable (context : AnalysisContext, token : Token, isAssignment : boolean) : boolean {
 		if (isAssignment) {
 			context.getTopBlock().localVariableStatuses.setStatus(this);
